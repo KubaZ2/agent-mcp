@@ -62,7 +62,7 @@ internal sealed class OpenAIRunner : IModelRunner, IModelRunnerFactory
     {
         foreach (var (name, info) in mcpServers)
         {
-            var runner = await McpRunner.CreateAsync(info);
+            var runner = await DefaultMcpRunner.CreateAsync(info);
 
             if (runner is null)
             {
