@@ -10,7 +10,7 @@ namespace AgentMcp;
 
 internal sealed class OpenAIRunner : IModelRunner
 {
-    private record ToolInfo(string OriginalName, IMcpRunner Runner);
+    private record ToolInfo(string OriginalName, IMcpServerConnection ServerConnection);
 
     private readonly string _model;
 
@@ -22,11 +22,11 @@ internal sealed class OpenAIRunner : IModelRunner
 
     private readonly ChatCompletionOptions _completionOptions;
 
-    private readonly IReadOnlyList<IMcpRunner> _mcpRunners;
+    private readonly IReadOnlyList<IMcpServerConnection> _mcpConnections;
 
     private readonly FrozenDictionary<string, ToolInfo> _toolMap;
 
-    private OpenAIRunner(AgentInfo agent, OpenAIProviderInfo provider, IReadOnlyList<IMcpRunner> mcpRunners, FrozenDictionary<string, ToolInfo> toolMap, IReadOnlyList<ChatTool> tools)
+    private OpenAIRunner(AgentConfiguration agent, OpenAIProviderConfiguration provider, IReadOnlyList<IMcpServerConnection> mcpConnections, FrozenDictionary<string, ToolInfo> toolMap, IReadOnlyList<ChatTool> tools)
     {
         _model = agent.Model;
 
@@ -52,80 +52,41 @@ internal sealed class OpenAIRunner : IModelRunner
 
         _completionOptions = completionOptions;
 
-        _mcpRunners = mcpRunners;
+        _mcpConnections = mcpConnections;
         _toolMap = toolMap;
     }
 
     public static string ProviderType => "OpenAI";
 
-    private static async Task CreateMcpServers(IReadOnlyList<string> mcpKeys,
-                                               IReadOnlyDictionary<string, McpServerInfo> mcpServers,
-                                               List<IMcpRunner> mcpRunners,
-                                               Dictionary<string, ToolInfo> toolMap,
-                                               List<ChatTool> tools,
-                                               ILogger logger)
+    public static async Task<IModelRunner?> CreateAsync(OpenAIProviderConfiguration provider,
+                                                        IMcpServerOrchestrator mcpConnectionOrchestrator,
+                                                        IMcpToolNameTransformer toolNameTransformer,
+                                                        AgentConfiguration agentInfo)
     {
-        int count = mcpKeys.Count;
-        for (int i = 0; i < count; i++)
+        var mcpInfos = agentInfo.Mcp is { } mcpKeys
+            ? await mcpConnectionOrchestrator.RunAsync(mcpKeys)
+            : [];
+
+        var toolMap = mcpInfos.SelectMany(info =>
         {
-            var key = mcpKeys[i];
+            return info.Tools.Select(tool => (ToolInfo: tool, info.ConnectionInfo.Connection));
+        }).ToFrozenDictionary(d => d.ToolInfo.Name, d => new ToolInfo(d.ToolInfo.Tool.Name, d.Connection));
 
-            if (!mcpServers.TryGetValue(key, out var info))
-            {
-                logger.LogWarning("MCP '{RunnerName}' is not defined in the configuration but is referenced by an agent. Skipping this server.", key);
-                continue;
-            }
-
-            var runner = await DefaultMcpRunner.CreateAsync(info);
-
-            var name = info.Name ?? key;
-
-            if (runner is null)
-            {
-                logger.LogWarning("MCP runner '{RunnerName}' has no valid configuration. Skipping this runner.", name);
-                continue;
-            }
-
-            var runnerTools = await runner.GetToolsAsync();
-
-            int runnerToolCount = runnerTools.Count;
-
-            for (int k = 0; k < runnerToolCount; k++)
-            {
-                var tool = runnerTools[k];
-
-                var originalToolName = tool.Name;
-
-                var toolName = $"{name}_{originalToolName}";
-
-                if (!toolMap.TryAdd(toolName, new(originalToolName, runner)))
-                {
-                    logger.LogWarning("Duplicate tool name '{ToolName}' found in MCP runner '{RunnerName}'. Skipping this tool.", toolName, name);
-                    continue;
-                }
-
-                tools.Add(ChatTool.CreateFunctionTool(toolName, tool.Description, BinaryData.FromString(tool.JsonSchema.GetRawText())));
-            }
-
-            mcpRunners.Add(runner);
-        }
-    }
-
-    public static async Task<IModelRunner?> CreateAsync(string name, OpenAIProviderInfo provider, AgentInfo agentInfo, Options options, ILogger logger)
-    {
-        List<IMcpRunner> mcpRunners = [];
-        Dictionary<string, ToolInfo> toolMap = [];
-        List<ChatTool> tools = [];
-
-        if (agentInfo.Mcp is { } mcpKeys)
+        var tools = mcpInfos.SelectMany(info =>
         {
-            if (options.Mcp is { } mcpServers)
-                await CreateMcpServers(mcpKeys, mcpServers, mcpRunners, toolMap, tools, logger);
-            else
-                logger.LogWarning("Agent {Agent} references MCP servers but no MCP servers are defined in the configuration.", name);
-        }
+            return info.Tools.Select(tool =>
+            {
+                return ChatTool.CreateFunctionTool(tool.Name,
+                                                   tool.Tool.Description,
+                                                   BinaryData.FromString(tool.Tool.JsonSchema.GetRawText()));
+            });
+        }).ToArray();
 
-        return new OpenAIRunner(agentInfo, provider, mcpRunners, toolMap.ToFrozenDictionary(), tools);
+        return new OpenAIRunner(agentInfo,
+                                provider,
+                                [.. mcpInfos.Select(info => info.ConnectionInfo.Connection)],
+                                toolMap,
+                                tools);
     }
 
     public async Task<ModelRunResult> RunModelAsync(string instruction, CancellationToken cancellationToken = default)
@@ -158,7 +119,7 @@ internal sealed class OpenAIRunner : IModelRunner
                             if (!_toolMap.TryGetValue(toolCall.FunctionName, out var toolInfo))
                                 return new ModelRunResult.Failure($"No '{toolCall.FunctionName}' tool found.");
 
-                            var toolResult = await toolInfo.Runner.CallToolAsync(toolInfo.OriginalName, arguments);
+                            var toolResult = await toolInfo.ServerConnection.CallToolAsync(toolInfo.OriginalName, arguments);
 
                             conversation.Add(ChatMessage.CreateToolMessage(toolCall.Id, JsonSerializer.Serialize(toolResult, Serialization.Default.CallToolResult)));
                         }

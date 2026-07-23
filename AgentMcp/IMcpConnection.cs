@@ -4,7 +4,7 @@ using ModelContextProtocol.Protocol;
 
 namespace AgentMcp;
 
-internal interface IMcpRunner
+internal interface IMcpServerConnection
 {
     public ValueTask<IList<McpClientTool>> GetToolsAsync();
 

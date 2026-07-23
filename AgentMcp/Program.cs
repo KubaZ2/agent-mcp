@@ -49,6 +49,10 @@ _ = mode switch
 services
     .AddSingleton<IModelRunnerProvider, DefaultModelRunnerProvider>();
 
+services.AddSingleton<IMcpServerConnectionProvider, DefaultMcpServerConnectionProvider>();
+services.AddSingleton<IMcpServerOrchestrator, DefaultMcpServerOrchestrator>();
+services.AddSingleton<IMcpToolNameTransformer, DefaultMcpToolNameTransformer>();
+
 services.AddSingleton<RunAgentProvider>();
 services.AddHostedService(services => services.GetRequiredService<RunAgentProvider>());
 services.AddSingleton(services => services.GetRequiredService<RunAgentProvider>().GetTool());
@@ -61,7 +65,7 @@ services
     {
         var section = configuration.GetSection("Providers");
 
-        Dictionary<string, IProviderInfo> providers = [];
+        Dictionary<string, IProviderConfiguration> providers = [];
 
         foreach (var providerSection in section.GetChildren())
         {
@@ -72,7 +76,7 @@ services
 
             var providerInfo = type switch
             {
-                "OpenAI" => providerSection.Get<OpenAIProviderInfo>() ?? throw new InvalidOperationException($"Failed to bind provider '{providerName}' to OpenAIProviderInfo."),
+                "OpenAI" => providerSection.Get<OpenAIProviderConfiguration>() ?? throw new InvalidOperationException($"Failed to bind provider '{providerName}' to OpenAIProviderInfo."),
                 _ => throw new InvalidOperationException($"Unknown provider type '{type}' for provider '{providerName}'."),
             };
 
@@ -111,29 +115,29 @@ internal partial class Options
     [OptionsValidator]
     internal partial class Validator : IValidateOptions<Options>;
 
-    internal IReadOnlyDictionary<string, IProviderInfo> Providers { get; set; } = null!;
+    internal IReadOnlyDictionary<string, IProviderConfiguration> Providers { get; set; } = null!;
 
     [Required]
-    public IReadOnlyDictionary<string, AgentInfo> Agents { get; set; } = null!;
+    public IReadOnlyDictionary<string, AgentConfiguration> Agents { get; set; } = null!;
 
-    public IReadOnlyDictionary<string, McpServerInfo>? Mcp { get; set; }
+    public IReadOnlyDictionary<string, McpServerConfiguration>? Mcp { get; set; }
 
     [ValidateEnumeratedItems]
-    public IEnumerable<AgentInfo>? AgentValues => Agents?.Values;
+    public IEnumerable<AgentConfiguration>? AgentValues => Agents?.Values;
 }
 
-internal interface IProviderInfo
+internal interface IProviderConfiguration
 {
 }
 
-internal class OpenAIProviderInfo : IProviderInfo
+internal class OpenAIProviderConfiguration : IProviderConfiguration
 {
     public string? ApiKey { get; set; }
 
     public string? Endpoint { get; set; }
 }
 
-internal class AgentInfo
+internal class AgentConfiguration
 {
     public string? Description { get; set; }
 
@@ -148,7 +152,7 @@ internal class AgentInfo
     public IReadOnlyList<string>? Mcp { get; set; }
 }
 
-internal class McpServerInfo
+internal class McpServerConfiguration
 {
     public string? Command { get; set; }
 
