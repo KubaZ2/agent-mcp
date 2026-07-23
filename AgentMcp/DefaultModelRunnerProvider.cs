@@ -1,23 +1,16 @@
-using System.Collections.Frozen;
-using Microsoft.Extensions.Logging;
-
 namespace AgentMcp;
 
 internal sealed class DefaultModelRunnerProvider(ILogger<DefaultModelRunnerProvider> logger) : IModelRunnerProvider
 {
-    private readonly FrozenDictionary<string, Func<AgentInfo, ILogger, Task<IModelRunner>>> _modelRunners = new Dictionary<string, Func<AgentInfo, ILogger, Task<IModelRunner>>>(StringComparer.OrdinalIgnoreCase)
+    public Task<IModelRunner?> CreateModelRunnerAsync(string name, AgentInfo agentInfo, Options options)
     {
-        { OpenAIRunner.ProviderName, OpenAIRunner.CreateAsync },
-    }.ToFrozenDictionary();
+        if (!options.Providers.TryGetValue(agentInfo.Provider, out var provider))
+            return Task.FromResult<IModelRunner?>(null);
 
-    public Task<IModelRunner?> CreateModelRunnerAsync(AgentInfo agentInfo)
-    {
-        if (_modelRunners.TryGetValue(agentInfo.Provider, out var factory))
-#pragma warning disable CS8619 // Nullability of reference types in value doesn't match target type.
-            return factory(agentInfo, logger);
-#pragma warning restore CS8619 // Nullability of reference types in value doesn't match target type.
-
-        return Task.FromResult<IModelRunner?>(null);
+        return provider switch
+        {
+            OpenAIProviderInfo openAIProvider => OpenAIRunner.CreateAsync(name, openAIProvider, agentInfo, options, logger),
+            _ => Task.FromResult<IModelRunner?>(null)
+        };
     }
 }
-

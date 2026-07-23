@@ -6,7 +6,7 @@ using OpenAI.Chat;
 
 namespace AgentMcp;
 
-internal sealed class OpenAIRunner : IModelRunner, IModelRunnerFactory
+internal sealed class OpenAIRunner : IModelRunner
 {
     private record ToolInfo(string OriginalName, IMcpRunner Runner);
 
@@ -24,7 +24,7 @@ internal sealed class OpenAIRunner : IModelRunner, IModelRunnerFactory
 
     private readonly FrozenDictionary<string, ToolInfo> _toolMap;
 
-    private OpenAIRunner(AgentInfo agent, IReadOnlyList<IMcpRunner> mcpRunners, FrozenDictionary<string, ToolInfo> toolMap, IReadOnlyList<ChatTool> tools)
+    private OpenAIRunner(AgentInfo agent, OpenAIProviderInfo provider, IReadOnlyList<IMcpRunner> mcpRunners, FrozenDictionary<string, ToolInfo> toolMap, IReadOnlyList<ChatTool> tools)
     {
         _model = agent.Model;
 
@@ -32,14 +32,16 @@ internal sealed class OpenAIRunner : IModelRunner, IModelRunnerFactory
 
         OpenAIClientOptions clientOptions = new();
 
-        if (agent.Endpoint is { } endpoint)
+        if (provider.Endpoint is { } endpoint)
             clientOptions.Endpoint = new(endpoint);
 
         _clientOptions = clientOptions;
 
-        _apiKey = new(agent.ApiKey ?? "-");
+        _apiKey = new(provider.ApiKey ?? "-");
 
         ChatCompletionOptions completionOptions = new();
+
+        completionOptions.Metadata["num_ctx"] = "9035";
 
         var optionsTools = completionOptions.Tools;
 
@@ -52,17 +54,29 @@ internal sealed class OpenAIRunner : IModelRunner, IModelRunnerFactory
         _toolMap = toolMap;
     }
 
-    public static string ProviderName => "OpenAI";
+    public static string ProviderType => "OpenAI";
 
-    private static async Task CreateMcpServers(IReadOnlyDictionary<string, McpServerInfo> mcpServers,
+    private static async Task CreateMcpServers(IReadOnlyList<string> mcpKeys,
+                                               IReadOnlyDictionary<string, McpServerInfo> mcpServers,
                                                List<IMcpRunner> mcpRunners,
                                                Dictionary<string, ToolInfo> toolMap,
                                                List<ChatTool> tools,
                                                ILogger logger)
     {
-        foreach (var (name, info) in mcpServers)
+        int count = mcpKeys.Count;
+        for (int i = 0; i < count; i++)
         {
+            var key = mcpKeys[i];
+
+            if (!mcpServers.TryGetValue(key, out var info))
+            {
+                logger.LogWarning("MCP '{RunnerName}' is not defined in the configuration but is referenced by an agent. Skipping this server.", key);
+                continue;
+            }
+
             var runner = await DefaultMcpRunner.CreateAsync(info);
+
+            var name = info.Name ?? key;
 
             if (runner is null)
             {
@@ -74,15 +88,15 @@ internal sealed class OpenAIRunner : IModelRunner, IModelRunnerFactory
 
             int runnerToolCount = runnerTools.Count;
 
-            for (int i = 0; i < runnerToolCount; i++)
+            for (int k = 0; k < runnerToolCount; k++)
             {
-                var tool = runnerTools[i];
+                var tool = runnerTools[k];
 
                 var originalToolName = tool.Name;
 
                 var toolName = $"{name}_{originalToolName}";
 
-                if (!toolMap.TryAdd(toolName, new ToolInfo(originalToolName, runner)))
+                if (!toolMap.TryAdd(toolName, new(originalToolName, runner)))
                 {
                     logger.LogWarning("Duplicate tool name '{ToolName}' found in MCP runner '{RunnerName}'. Skipping this tool.", toolName, name);
                     continue;
@@ -95,16 +109,21 @@ internal sealed class OpenAIRunner : IModelRunner, IModelRunnerFactory
         }
     }
 
-    public static async Task<IModelRunner> CreateAsync(AgentInfo agentInfo, ILogger logger)
+    public static async Task<IModelRunner?> CreateAsync(string name, OpenAIProviderInfo provider, AgentInfo agentInfo, Options options, ILogger logger)
     {
         List<IMcpRunner> mcpRunners = [];
         Dictionary<string, ToolInfo> toolMap = [];
         List<ChatTool> tools = [];
 
-        if (agentInfo.Mcp is { } mcpServers)
-            await CreateMcpServers(mcpServers, mcpRunners, toolMap, tools, logger);
+        if (agentInfo.Mcp is { } mcpKeys)
+        {
+            if (options.Mcp is { } mcpServers)
+                await CreateMcpServers(mcpKeys, mcpServers, mcpRunners, toolMap, tools, logger);
+            else
+                logger.LogWarning("Agent {Agent} references MCP servers but no MCP servers are defined in the configuration.", name);
+        }
 
-        return new OpenAIRunner(agentInfo, mcpRunners, toolMap.ToFrozenDictionary(), tools);
+        return new OpenAIRunner(agentInfo, provider, mcpRunners, toolMap.ToFrozenDictionary(), tools);
     }
 
     public async Task<ModelRunResult> RunModelAsync(string instruction, CancellationToken cancellationToken = default)

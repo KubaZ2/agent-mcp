@@ -17,10 +17,3 @@ internal interface IModelRunner
 {
     public Task<ModelRunResult> RunModelAsync(string instruction, CancellationToken cancellationToken = default);
 }
-
-internal interface IModelRunnerFactory
-{
-    public static abstract string ProviderName { get; }
-
-    public static abstract Task<IModelRunner> CreateAsync(AgentInfo agentInfo, ILogger logger);
-}

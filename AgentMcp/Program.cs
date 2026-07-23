@@ -29,7 +29,7 @@ IHostApplicationBuilder builder = mode switch
     _ => throw new InvalidOperationException("Unknown TransportMode"),
 };
 
-var x = Host.CreateApplicationBuilder();
+builder.Configuration.AddIniFile("appsettings.ini", optional: true, reloadOnChange: true);
 
 builder.Logging.AddConsole(consoleLogOptions =>
 {
@@ -40,7 +40,6 @@ var services = builder.Services;
 
 var mcpServerBuilder = services
     .AddMcpServer()
-    .WithTools<Name>()
     .WithTasks(new InMemoryMcpTaskStore());
 
 _ = mode switch
@@ -59,6 +58,31 @@ services.AddSingleton(services => services.GetRequiredService<RunAgentProvider>(
 
 services
     .AddOptions<Options>()
+    .Configure((Options options, IConfiguration configuration) =>
+    {
+        var section = configuration.GetSection("Providers");
+
+        Dictionary<string, IProviderInfo> providers = [];
+
+        foreach (var providerSection in section.GetChildren())
+        {
+            var providerName = providerSection.Key;
+
+            var type = providerSection.GetValue<string>("Type")
+                ?? throw new InvalidOperationException($"Provider '{providerName}' is missing the 'Type' property.");
+
+            var providerInfo = type switch
+            {
+                "OpenAI" => providerSection.Get<OpenAIProviderInfo>() ?? throw new InvalidOperationException($"Failed to bind provider '{providerName}' to OpenAIProviderInfo."),
+                _ => throw new InvalidOperationException($"Unknown provider type '{type}' for provider '{providerName}'."),
+            };
+
+            if (!providers.TryAdd(providerName, providerInfo))
+                throw new InvalidOperationException($"Duplicate provider name '{providerName}' found in configuration.");
+        }
+
+        options.Providers = providers;
+    })
     .BindConfiguration(string.Empty)
     .ValidateDataAnnotations()
     .ValidateOnStart();
@@ -85,49 +109,32 @@ internal enum TransportMode
     Http,
 }
 
-internal class Name(McpServer server)
-{
-    [McpServerTool, Description("Provides the LLM name")]
-    public async Task<string> GetNameAsync()
-    {
-        await Task.Delay(5_000);
-
-        if (server.ClientCapabilities is not { Elicitation: { } })
-            return "Edward (No elicitation support)";
-
-        var userInput = await server.ElicitAsync(new()
-        {
-            Message = "Full?",
-            RequestedSchema = new()
-            {
-                Properties = new Dictionary<string, ElicitRequestParams.PrimitiveSchemaDefinition>
-                {
-                    ["action"] = new ElicitRequestParams.BooleanSchema()
-                    {
-                        Title = "Return full name?",
-                        Description = "Whether to return the full name or just the first name.",
-                        Default = true,
-                    },
-                },
-            }
-        });
-
-        await Task.Delay(5_000);
-
-        if (userInput.Action == "accept" && userInput.Content?["action"].ValueKind == System.Text.Json.JsonValueKind.True)
-            return "Edward Warchocki";
-
-        return "Edward";
-    }
-}
-
 internal class Options
 {
     [Required]
+    public required IReadOnlyDictionary<string, IProviderInfo> Providers { get; set; }
+
+    [Required]
     public required IReadOnlyDictionary<string, AgentInfo> Agents { get; set; }
+
+    public IReadOnlyDictionary<string, McpServerInfo>? Mcp { get; set; }
+
+    [ValidateEnumeratedItems]
+    public IEnumerable<IProviderInfo>? ProviderValues => Providers?.Values;
 
     [ValidateEnumeratedItems]
     public IEnumerable<AgentInfo>? AgentValues => Agents?.Values;
+}
+
+internal interface IProviderInfo
+{
+}
+
+internal class OpenAIProviderInfo : IProviderInfo
+{
+    public string? ApiKey { get; set; }
+
+    public string? Endpoint { get; set; }
 }
 
 internal class AgentInfo
@@ -142,14 +149,7 @@ internal class AgentInfo
     [Required]
     public required string Model { get; set; }
 
-    public string? Endpoint { get; set; }
-
-    public string? ApiKey { get; set; }
-
-    public IReadOnlyDictionary<string, McpServerInfo>? Mcp { get; set; }
-
-    [ValidateEnumeratedItems]
-    public IEnumerable<McpServerInfo>? McpValues => Mcp?.Values;
+    public IReadOnlyList<string>? Mcp { get; set; }
 }
 
 internal class McpServerInfo
@@ -159,4 +159,6 @@ internal class McpServerInfo
     public IReadOnlyList<string>? Args { get; set; }
 
     public string? Endpoint { get; set; }
+
+    public string? Name { get; set; }
 }

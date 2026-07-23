@@ -102,7 +102,8 @@ internal class RunAgentProvider(IOptionsMonitor<Options> options, ILogger<RunAge
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        var agents = options.CurrentValue.Agents;
+        var optionsValue = options.CurrentValue;
+        var agents = optionsValue.Agents;
 
         Dictionary<string, IModelRunner> modelRunners = new(StringComparer.OrdinalIgnoreCase);
 
@@ -110,7 +111,7 @@ internal class RunAgentProvider(IOptionsMonitor<Options> options, ILogger<RunAge
         {
             var (name, agent) = pair;
 
-            var modelRunner = await modelRunnerProvider.CreateModelRunnerAsync(agent);
+            var modelRunner = await modelRunnerProvider.CreateModelRunnerAsync(name, agent, optionsValue);
 
             if (modelRunner is null)
             {
