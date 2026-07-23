@@ -8,9 +8,13 @@ using OpenAI.Chat;
 
 namespace AgentMcp;
 
-internal sealed class OpenAIRunner : IModelRunner
+internal partial class OpenAIRunner : IModelRunner
 {
     private record ToolInfo(string OriginalName, IMcpServerConnection ServerConnection);
+
+    [JsonSerializable(typeof(CallToolResult))]
+    [JsonSerializable(typeof(IDictionary<string, JsonElement>))]
+    internal partial class Serialization : JsonSerializerContext;
 
     private readonly string _model;
 
@@ -26,7 +30,11 @@ internal sealed class OpenAIRunner : IModelRunner
 
     private readonly FrozenDictionary<string, ToolInfo> _toolMap;
 
-    private OpenAIRunner(AgentConfiguration agent, OpenAIProviderConfiguration provider, IReadOnlyList<IMcpServerConnection> mcpConnections, FrozenDictionary<string, ToolInfo> toolMap, IReadOnlyList<ChatTool> tools)
+    private OpenAIRunner(AgentConfiguration agent,
+                         OpenAIProviderConfiguration provider,
+                         IReadOnlyList<IMcpServerConnection> mcpConnections,
+                         FrozenDictionary<string, ToolInfo> toolMap,
+                         IReadOnlyList<ChatTool> tools)
     {
         _model = agent.Model;
 
@@ -60,7 +68,6 @@ internal sealed class OpenAIRunner : IModelRunner
 
     public static async Task<IModelRunner?> CreateAsync(OpenAIProviderConfiguration provider,
                                                         IMcpServerOrchestrator mcpConnectionOrchestrator,
-                                                        IMcpToolNameTransformer toolNameTransformer,
                                                         AgentConfiguration agentInfo)
     {
         var mcpInfos = agentInfo.Mcp is { } mcpKeys
@@ -138,6 +145,3 @@ internal sealed class OpenAIRunner : IModelRunner
     }
 }
 
-[JsonSerializable(typeof(CallToolResult))]
-[JsonSerializable(typeof(IDictionary<string, JsonElement>))]
-internal partial class Serialization : JsonSerializerContext;

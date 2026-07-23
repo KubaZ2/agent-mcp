@@ -1,6 +1,6 @@
 namespace AgentMcp;
 
-internal sealed class DefaultModelRunnerProvider(IMcpServerOrchestrator orchestrator, IMcpToolNameTransformer toolNameTransformer) : IModelRunnerProvider
+internal sealed class DefaultModelRunnerProvider(IMcpServerOrchestrator orchestrator) : IModelRunnerProvider
 {
     public Task<IModelRunner?> CreateModelRunnerAsync(string name, AgentConfiguration agentInfo, Options options)
     {
@@ -9,7 +9,7 @@ internal sealed class DefaultModelRunnerProvider(IMcpServerOrchestrator orchestr
 
         return provider switch
         {
-            OpenAIProviderConfiguration openAIProvider => OpenAIRunner.CreateAsync(openAIProvider, orchestrator, toolNameTransformer, agentInfo),
+            OpenAIProviderConfiguration openAIProvider => OpenAIRunner.CreateAsync(openAIProvider, orchestrator, agentInfo),
             _ => Task.FromResult<IModelRunner?>(null)
         };
     }
