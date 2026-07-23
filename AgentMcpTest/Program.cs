@@ -61,15 +61,17 @@ foreach (var tool in await client.ListToolsAsync())
 //     }
 // });
 
+await Task.Delay(1000);
+
 var task = await client.CallToolAsTaskAsync(new()
 {
-    Name = "get_name",
-    // Name = "run_agent",
-    // Arguments = new Dictionary<string, JsonElement>
-    // {
-    //     ["agent"] = JsonSerializer.SerializeToElement("code-writer"),
-    //     ["instruction"] = JsonSerializer.SerializeToElement("Write a haiku about C#."),
-    // }
+    // Name = "get_name",
+    Name = "run_agent",
+    Arguments = new Dictionary<string, JsonElement>
+    {
+        ["agent"] = JsonSerializer.SerializeToElement("code-writer"),
+        ["instruction"] = JsonSerializer.SerializeToElement("Write a haiku about C#."),
+    }
 });
 
 var id = task.TaskCreated!.TaskId;
