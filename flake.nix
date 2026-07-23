@@ -28,6 +28,7 @@
         default = pkgs.mkShell {
           packages = [
             dotnet
+            pkgs.nodejs_26
           ];
 
           DOTNET_ROOT = dotnetRoot;

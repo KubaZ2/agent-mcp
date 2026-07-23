@@ -1,6 +1,8 @@
 using System.ClientModel;
 using System.Collections.Frozen;
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using ModelContextProtocol.Protocol;
 using OpenAI;
 using OpenAI.Chat;
 
@@ -151,14 +153,14 @@ internal sealed class OpenAIRunner : IModelRunner
 
                         foreach (var toolCall in completion.Value.ToolCalls)
                         {
-                            var arguments = toolCall.FunctionArguments.ToObjectFromJson<IDictionary<string, JsonElement>>()!;
+                            var arguments = toolCall.FunctionArguments.ToObjectFromJson(Serialization.Default.IDictionaryStringJsonElement)!;
 
                             if (!_toolMap.TryGetValue(toolCall.FunctionName, out var toolInfo))
                                 return new ModelRunResult.Failure($"No '{toolCall.FunctionName}' tool found.");
 
                             var toolResult = await toolInfo.Runner.CallToolAsync(toolInfo.OriginalName, arguments);
 
-                            conversation.Add(ChatMessage.CreateToolMessage(toolCall.Id, JsonSerializer.Serialize(toolResult)));
+                            conversation.Add(ChatMessage.CreateToolMessage(toolCall.Id, JsonSerializer.Serialize(toolResult, Serialization.Default.CallToolResult)));
                         }
                         break;
                     case ChatFinishReason.Stop:
@@ -174,3 +176,7 @@ internal sealed class OpenAIRunner : IModelRunner
         }
     }
 }
+
+[JsonSerializable(typeof(CallToolResult))]
+[JsonSerializable(typeof(IDictionary<string, JsonElement>))]
+internal partial class Serialization : JsonSerializerContext;

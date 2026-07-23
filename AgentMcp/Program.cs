@@ -1,10 +1,7 @@
-﻿using System.ComponentModel;
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using AgentMcp;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Extensions.Tasks;
-using ModelContextProtocol.Protocol;
-using ModelContextProtocol.Server;
 
 TransportMode mode;
 
@@ -56,6 +53,8 @@ services.AddSingleton<RunAgentProvider>();
 services.AddHostedService(services => services.GetRequiredService<RunAgentProvider>());
 services.AddSingleton(services => services.GetRequiredService<RunAgentProvider>().GetTool());
 
+services.AddSingleton<IValidateOptions<Options>, Options.Validator>();
+
 services
     .AddOptions<Options>()
     .Configure((Options options, IConfiguration configuration) =>
@@ -83,9 +82,7 @@ services
 
         options.Providers = providers;
     })
-    .BindConfiguration(string.Empty)
-    .ValidateDataAnnotations()
-    .ValidateOnStart();
+    .BindConfiguration(string.Empty);
 
 IHost host = mode switch
 {
@@ -109,18 +106,17 @@ internal enum TransportMode
     Http,
 }
 
-internal class Options
+internal partial class Options
 {
-    [Required]
-    public required IReadOnlyDictionary<string, IProviderInfo> Providers { get; set; }
+    [OptionsValidator]
+    internal partial class Validator : IValidateOptions<Options>;
+
+    internal IReadOnlyDictionary<string, IProviderInfo> Providers { get; set; } = null!;
 
     [Required]
-    public required IReadOnlyDictionary<string, AgentInfo> Agents { get; set; }
+    public IReadOnlyDictionary<string, AgentInfo> Agents { get; set; } = null!;
 
     public IReadOnlyDictionary<string, McpServerInfo>? Mcp { get; set; }
-
-    [ValidateEnumeratedItems]
-    public IEnumerable<IProviderInfo>? ProviderValues => Providers?.Values;
 
     [ValidateEnumeratedItems]
     public IEnumerable<AgentInfo>? AgentValues => Agents?.Values;
@@ -144,10 +140,10 @@ internal class AgentInfo
     public string? SystemPrompt { get; set; }
 
     [Required]
-    public required string Provider { get; set; }
+    public string Provider { get; set; } = null!;
 
     [Required]
-    public required string Model { get; set; }
+    public string Model { get; set; } = null!;
 
     public IReadOnlyList<string>? Mcp { get; set; }
 }
