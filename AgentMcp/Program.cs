@@ -1,5 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
-using AgentMcp;
+﻿using AgentMcp;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Extensions.Tasks;
 
@@ -43,7 +42,7 @@ _ = mode switch
 {
     TransportMode.Stdio => mcpServerBuilder.WithStdioServerTransport(),
     TransportMode.Http => mcpServerBuilder.WithHttpTransport(),
-    _ => throw new InvalidOperationException("Unknown TransportMode"),
+    _ => throw new InvalidOperationException($"Unknown {nameof(TransportMode)}"),
 };
 
 services
@@ -78,6 +77,7 @@ services
             IProviderConfiguration? providerInfo = type switch
             {
                 _ when type.Equals("openai", c) => providerSection.Get<OpenAIProviderConfiguration>(),
+                _ when type.Equals("anthropic", c) => providerSection.Get<AnthropicProviderConfiguration>(),
                 _ when type.Equals("ollama", c) => providerSection.Get<OllamaProviderConfiguration>(),
                 _ => throw new InvalidOperationException($"Unknown provider type '{type}' for provider '{providerName}'."),
             };
@@ -108,67 +108,3 @@ if (mode is TransportMode.Http)
 }
 
 await host.RunAsync();
-
-internal enum TransportMode
-{
-    Stdio,
-    Http,
-}
-
-internal partial class Options
-{
-    [OptionsValidator]
-    internal partial class Validator : IValidateOptions<Options>;
-
-    internal IReadOnlyDictionary<string, IProviderConfiguration> Providers { get; set; } = null!;
-
-    [Required]
-    public IReadOnlyDictionary<string, AgentConfiguration> Agents { get; set; } = null!;
-
-    public IReadOnlyDictionary<string, McpServerConfiguration>? Mcp { get; set; }
-
-    [ValidateEnumeratedItems]
-    public IEnumerable<AgentConfiguration>? AgentValues => Agents?.Values;
-}
-
-internal interface IProviderConfiguration
-{
-}
-
-internal class OpenAIProviderConfiguration : IProviderConfiguration
-{
-    public string? ApiKey { get; set; }
-
-    public string? Endpoint { get; set; }
-}
-
-internal class OllamaProviderConfiguration : IProviderConfiguration
-{
-    public string? Endpoint { get; set; }
-}
-
-internal class AgentConfiguration
-{
-    public string? Description { get; set; }
-
-    public string? SystemPrompt { get; set; }
-
-    [Required]
-    public string Provider { get; set; } = null!;
-
-    [Required]
-    public string Model { get; set; } = null!;
-
-    public IReadOnlyList<string>? Mcp { get; set; }
-}
-
-internal class McpServerConfiguration
-{
-    public string? Command { get; set; }
-
-    public IReadOnlyList<string>? Args { get; set; }
-
-    public string? Endpoint { get; set; }
-
-    public string? Name { get; set; }
-}

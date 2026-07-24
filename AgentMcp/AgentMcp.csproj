@@ -19,6 +19,7 @@
     <PackageReference Include="ModelContextProtocol.Extensions.Tasks" Version="2.0.0-preview.3" />
     <PackageReference Include="Ollama" Version="1.15.1" />
     <PackageReference Include="OpenAI" Version="2.12.0" />
+    <PackageReference Include="tryAGI.Anthropic" Version="3.8.3" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,4 +1,5 @@
 using System.ClientModel;
+using Anthropic;
 using Microsoft.Extensions.AI;
 using Ollama;
 using OpenAI;
@@ -31,6 +32,7 @@ internal partial class DefaultModelRunnerProvider(IMcpServerOrchestrator orchest
         IChatClient client = provider switch
         {
             OpenAIProviderConfiguration openAIProvider => CreateOpenAIClient(agent, openAIProvider),
+            AnthropicProviderConfiguration anthropicProvider => CreateAnthropicClient(anthropicProvider),
             OllamaProviderConfiguration ollamaProvider => CreateOllamaClient(ollamaProvider),
             _ => throw new NotSupportedException($"Provider type {provider.GetType().Name} is not supported.")
         };
@@ -52,6 +54,25 @@ internal partial class DefaultModelRunnerProvider(IMcpServerOrchestrator orchest
 
         ChatClient rawClient = new(agent.Model, new ApiKeyCredential(provider.ApiKey ?? "-"), clientOptions);
         return rawClient.AsIChatClient();
+    }
+
+    private static AnthropicClient CreateAnthropicClient(AnthropicProviderConfiguration provider)
+    {
+        List<Anthropic.EndPointAuthorization>? authorizations = null;
+
+        if (provider.ApiKey is { } apiKey)
+        {
+            Anthropic.EndPointAuthorization authorization = new()
+            {
+                Type = "ApiKey",
+                Location = "Header",
+                Name = "x-api-key",
+                Value = apiKey
+            };
+            authorizations = [authorization];
+        }
+
+        return new(baseUri: provider.Endpoint is { } endpoint ? new(endpoint) : null, authorizations: authorizations);
     }
 
     private static OllamaClient CreateOllamaClient(OllamaProviderConfiguration provider)
