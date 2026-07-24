@@ -4,7 +4,6 @@ namespace AgentMcp;
 
 internal class DefaultMcpServerOrchestrator(IOptions<Options> options,
                                             IMcpServerConnectionProvider provider,
-                                            IMcpToolNameTransformer toolNameTransformer,
                                             ILogger<DefaultMcpServerOrchestrator> logger) : IMcpServerOrchestrator
 {
     private async Task<McpServerInfo?> ConnectAsync(string key,
@@ -30,9 +29,7 @@ internal class DefaultMcpServerOrchestrator(IOptions<Options> options,
 
         McpServerConnectionInfo connectionInfo = new(name, connection);
 
-        var transformedTools = tools.Select(tool => new McpServerToolInfo(toolNameTransformer.Transform(tool, connectionInfo), tool));
-
-        return new(connectionInfo, [.. transformedTools]);
+        return new(connectionInfo, [.. tools]);
     }
 
     public async Task<IReadOnlyList<McpServerInfo>> RunAsync(IReadOnlyList<string> mcpServerKeys)

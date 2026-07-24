@@ -51,7 +51,6 @@ services
 
 services.AddSingleton<IMcpServerConnectionProvider, DefaultMcpServerConnectionProvider>();
 services.AddSingleton<IMcpServerOrchestrator, DefaultMcpServerOrchestrator>();
-services.AddSingleton<IMcpToolNameTransformer, DefaultMcpToolNameTransformer>();
 
 services.AddSingleton<RunAgentProvider>();
 services.AddHostedService(services => services.GetRequiredService<RunAgentProvider>());

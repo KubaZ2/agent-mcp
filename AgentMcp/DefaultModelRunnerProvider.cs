@@ -24,7 +24,8 @@ internal partial class DefaultModelRunnerProvider(IMcpServerOrchestrator orchest
 
         var tools = mcpInfos.SelectMany(info =>
         {
-            return info.Tools.Select(tool => new NamespacedAIFunction(tool.Tool, info.ConnectionInfo.ServerName));
+            var serverName = info.ConnectionInfo.ServerName;
+            return info.Tools.Select(tool => new NamespacedAIFunction(tool, serverName));
         }).ToArray();
 
         IChatClient client = provider switch

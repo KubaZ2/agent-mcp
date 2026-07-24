@@ -1,12 +1,10 @@
-using ModelContextProtocol.Client;
+using Microsoft.Extensions.AI;
 
 namespace AgentMcp;
 
-internal record McpServerToolInfo(string Name, McpClientTool Tool);
-
 internal record McpServerConnectionInfo(string ServerName, IMcpServerConnection Connection);
 
-internal record McpServerInfo(McpServerConnectionInfo ConnectionInfo, IReadOnlyList<McpServerToolInfo> Tools);
+internal record McpServerInfo(McpServerConnectionInfo ConnectionInfo, IReadOnlyList<AIFunction> Tools);
 
 internal interface IMcpServerOrchestrator
 {
