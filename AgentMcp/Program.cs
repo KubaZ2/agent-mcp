@@ -73,12 +73,17 @@ services
             var type = providerSection.GetValue<string>("Type")
                 ?? throw new InvalidOperationException($"Provider '{providerName}' is missing the 'Type' property.");
 
-            IProviderConfiguration providerInfo = type switch
+            const StringComparison c = StringComparison.InvariantCultureIgnoreCase;
+
+            IProviderConfiguration? providerInfo = type switch
             {
-                "OpenAI" => providerSection.Get<OpenAIProviderConfiguration>() ?? throw new InvalidOperationException($"Failed to bind provider '{providerName}' to {nameof(OpenAIProviderConfiguration)}."),
-                "Ollama" => providerSection.Get<OllamaProviderConfiguration>() ?? throw new InvalidOperationException($"Failed to bind provider '{providerName}' to {nameof(OllamaProviderConfiguration)}."),
+                _ when type.Equals("openai", c) => providerSection.Get<OpenAIProviderConfiguration>(),
+                _ when type.Equals("ollama", c) => providerSection.Get<OllamaProviderConfiguration>(),
                 _ => throw new InvalidOperationException($"Unknown provider type '{type}' for provider '{providerName}'."),
             };
+
+            if (providerInfo is null)
+                throw new InvalidOperationException($"Provider '{providerName}' of type '{type}' could not be bind to a configuration object.");
 
             if (!providers.TryAdd(providerName, providerInfo))
                 throw new InvalidOperationException($"Duplicate provider name '{providerName}' found in configuration.");
