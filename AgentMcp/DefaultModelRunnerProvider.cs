@@ -1,16 +1,60 @@
+using System.ClientModel;
+using Microsoft.Extensions.AI;
+using Ollama;
+using OpenAI;
+using OpenAI.Chat;
+
 namespace AgentMcp;
 
-internal sealed class DefaultModelRunnerProvider(IMcpServerOrchestrator orchestrator) : IModelRunnerProvider
+internal partial class DefaultModelRunnerProvider(IMcpServerOrchestrator orchestrator) : IModelRunnerProvider
 {
-    public Task<IModelRunner?> CreateModelRunnerAsync(string name, AgentConfiguration agentInfo, Options options)
+    private sealed class NamespacedAIFunction(AIFunction function, string serverName) : DelegatingAIFunction(function)
     {
-        if (!options.Providers.TryGetValue(agentInfo.Provider, out var provider))
-            return Task.FromResult<IModelRunner?>(null);
+        public override string Name => $"{serverName}_{base.Name}";
+    }
 
-        return provider switch
+    public async Task<IModelRunner?> CreateModelRunnerAsync(string name, AgentConfiguration agent, Options options)
+    {
+        if (!options.Providers.TryGetValue(agent.Provider, out var provider))
+            return null;
+
+        var mcpInfos = agent.Mcp is { } mcpKeys
+            ? await orchestrator.RunAsync(mcpKeys)
+            : [];
+
+        var tools = mcpInfos.SelectMany(info =>
         {
-            OpenAIProviderConfiguration openAIProvider => OpenAIRunner.CreateAsync(openAIProvider, orchestrator, agentInfo),
-            _ => Task.FromResult<IModelRunner?>(null)
+            return info.Tools.Select(tool => new NamespacedAIFunction(tool.Tool, info.ConnectionInfo.ServerName));
+        }).ToArray();
+
+        IChatClient client = provider switch
+        {
+            OpenAIProviderConfiguration openAIProvider => CreateOpenAIClient(agent, openAIProvider),
+            OllamaProviderConfiguration ollamaProvider => CreateOllamaClient(ollamaProvider),
+            _ => throw new NotSupportedException($"Provider type {provider.GetType().Name} is not supported.")
         };
+
+        ChatOptions chatOptions = new()
+        {
+            Tools = tools,
+            ModelId = agent.Model,
+        };
+
+        return new DefaultModelRunner(client, chatOptions, agent.SystemPrompt);
+    }
+
+    private static IChatClient CreateOpenAIClient(AgentConfiguration agent, OpenAIProviderConfiguration provider)
+    {
+        OpenAIClientOptions clientOptions = new();
+        if (provider.Endpoint is { } endpoint)
+            clientOptions.Endpoint = new(endpoint);
+
+        ChatClient rawClient = new(agent.Model, new ApiKeyCredential(provider.ApiKey ?? "-"), clientOptions);
+        return rawClient.AsIChatClient();
+    }
+
+    private static OllamaClient CreateOllamaClient(OllamaProviderConfiguration provider)
+    {
+        return new(baseUri: provider.Endpoint is { } endpoint ? new(endpoint) : null);
     }
 }

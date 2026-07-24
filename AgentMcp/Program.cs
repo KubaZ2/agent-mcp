@@ -23,7 +23,7 @@ IHostApplicationBuilder builder = mode switch
 {
     TransportMode.Stdio => Host.CreateApplicationBuilder(args),
     TransportMode.Http => WebApplication.CreateSlimBuilder(args),
-    _ => throw new InvalidOperationException("Unknown TransportMode"),
+    _ => throw new InvalidOperationException($"Unknown {nameof(TransportMode)}"),
 };
 
 builder.Configuration.AddIniFile("appsettings.ini", optional: true, reloadOnChange: true);
@@ -74,9 +74,10 @@ services
             var type = providerSection.GetValue<string>("Type")
                 ?? throw new InvalidOperationException($"Provider '{providerName}' is missing the 'Type' property.");
 
-            var providerInfo = type switch
+            IProviderConfiguration providerInfo = type switch
             {
-                "OpenAI" => providerSection.Get<OpenAIProviderConfiguration>() ?? throw new InvalidOperationException($"Failed to bind provider '{providerName}' to OpenAIProviderInfo."),
+                "OpenAI" => providerSection.Get<OpenAIProviderConfiguration>() ?? throw new InvalidOperationException($"Failed to bind provider '{providerName}' to {nameof(OpenAIProviderConfiguration)}."),
+                "Ollama" => providerSection.Get<OllamaProviderConfiguration>() ?? throw new InvalidOperationException($"Failed to bind provider '{providerName}' to {nameof(OllamaProviderConfiguration)}."),
                 _ => throw new InvalidOperationException($"Unknown provider type '{type}' for provider '{providerName}'."),
             };
 
@@ -134,6 +135,11 @@ internal class OpenAIProviderConfiguration : IProviderConfiguration
 {
     public string? ApiKey { get; set; }
 
+    public string? Endpoint { get; set; }
+}
+
+internal class OllamaProviderConfiguration : IProviderConfiguration
+{
     public string? Endpoint { get; set; }
 }
 

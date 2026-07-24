@@ -15,26 +15,35 @@ internal class RunAgentProvider(IOptionsMonitor<Options> options, ILogger<RunAge
     {
         logger.LogInformation("Running agent {Agent} with instruction: {Instruction}", agent, instruction);
 
-        if (!_modelRunners!.TryGetValue(agent, out var modelRunner))
+        try
         {
-            logger.LogWarning("No model runner found for agent {Agent}", agent);
+            if (!_modelRunners!.TryGetValue(agent, out var modelRunner))
+            {
+                logger.LogWarning("No model runner found for agent {Agent}", agent);
 
-            return $"No model runner found for agent {agent}";
+                return $"No model runner found for agent {agent}";
+            }
+
+            var result = await modelRunner.RunModelAsync(instruction);
+
+            if (result is ModelRunResult.Failure failure)
+            {
+                logger.LogError("Agent {Agent} failed with error: {Error}", agent, failure.ErrorMessage);
+
+                return $"Agent {agent} failed with error: {failure.ErrorMessage}";
+            }
+            else if (result is ModelRunResult.Success success)
+            {
+                logger.LogInformation("Agent {Agent} succeeded with result: {Result}", agent, success.Result);
+
+                return success.Result;
+            }
         }
-
-        var result = await modelRunner.RunModelAsync(instruction);
-
-        if (result is ModelRunResult.Failure failure)
+        catch (Exception ex)
         {
-            logger.LogError("Agent {Agent} failed with error: {Error}", agent, failure.ErrorMessage);
+            logger.LogError(ex, "Agent {Agent} failed with exception: {Exception}", agent, ex.Message);
 
-            return $"Agent {agent} failed with error: {failure.ErrorMessage}";
-        }
-        else if (result is ModelRunResult.Success success)
-        {
-            logger.LogInformation("Agent {Agent} succeeded with result: {Result}", agent, success.Result);
-
-            return success.Result;
+            return $"Agent {agent} failed with exception: {ex.Message}";
         }
 
         return "Unknown result";
