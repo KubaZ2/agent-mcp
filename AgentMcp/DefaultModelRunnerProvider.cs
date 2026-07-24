@@ -1,6 +1,7 @@
 using System.ClientModel;
 using Anthropic;
 using Microsoft.Extensions.AI;
+using ModelContextProtocol.Client;
 using Ollama;
 using OpenAI;
 using OpenAI.Chat;
@@ -9,11 +10,6 @@ namespace AgentMcp;
 
 internal partial class DefaultModelRunnerProvider(IMcpServerOrchestrator orchestrator) : IModelRunnerProvider
 {
-    private sealed class NamespacedAIFunction(AIFunction function, string serverName) : DelegatingAIFunction(function)
-    {
-        public override string Name => $"{serverName}_{base.Name}";
-    }
-
     public async Task<IModelRunner?> CreateModelRunnerAsync(string name, AgentConfiguration agent, Options options)
     {
         if (!options.Providers.TryGetValue(agent.Provider, out var provider))
@@ -26,7 +22,16 @@ internal partial class DefaultModelRunnerProvider(IMcpServerOrchestrator orchest
         var tools = mcpInfos.SelectMany(info =>
         {
             var serverName = info.ConnectionInfo.ServerName;
-            return info.Tools.Select(tool => new NamespacedAIFunction(tool, serverName));
+
+            return info.Tools.Select(tool =>
+            {
+                AIFunction function = new NamespacedAIFunction(tool, serverName);
+
+                if (tool is McpClientTool mcpClientTool)
+                    function = new TaskMcpClientTool(function, mcpClientTool);
+
+                return function;
+            });
         }).ToArray();
 
         IChatClient client = provider switch
@@ -43,7 +48,7 @@ internal partial class DefaultModelRunnerProvider(IMcpServerOrchestrator orchest
             ModelId = agent.Model,
         };
 
-        return new DefaultModelRunner(client, chatOptions, agent.SystemPrompt);
+        return new DefaultModelRunner(new FunctionInvokingChatClient(client), chatOptions, agent.SystemPrompt);
     }
 
     private static IChatClient CreateOpenAIClient(AgentConfiguration agent, OpenAIProviderConfiguration provider)

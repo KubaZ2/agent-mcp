@@ -1,8 +1,11 @@
 using System.Collections.Frozen;
 using System.ComponentModel;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
+using ModelContextProtocol.Client;
+using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 
 namespace AgentMcp;
@@ -11,7 +14,75 @@ internal class RunAgentProvider(IOptionsMonitor<Options> options, ILogger<RunAge
 {
     private FrozenDictionary<string, IModelRunner>? _modelRunners;
 
-    private async Task<string> RunAgentAsync([Description("Agent")] string agent, [Description("Instruction")] string instruction)
+    private async ValueTask<object?> HandleFunctionInvocationAsync(FunctionInvocationContext context, string agent, McpServer server, CancellationToken cancellationToken)
+    {
+        var function = context.Function;
+
+        logger.LogInformation("Agent {Agent} is requesting to call {FunctionName} with arguments: {Arguments}", agent, function.Name, context.Arguments);
+
+        if (server.ClientCapabilities is not { Elicitation: { } })
+        {
+            logger.LogWarning("Client does not support function invocation.");
+
+            return "Error: The client does not support function invocation.";
+        }
+
+        var message = $"Agent {agent} is requesting to call {function.Name}. Please select the action to take.";
+
+        var result = await server.ElicitAsync(new()
+        {
+            Message = message,
+            RequestedSchema = new()
+            {
+                Properties = new Dictionary<string, ElicitRequestParams.PrimitiveSchemaDefinition>()
+                {
+                    ["action"] = new ElicitRequestParams.TitledSingleSelectEnumSchema()
+                    {
+                        Title = "Tool Call Request",
+                        Description = message,
+                        OneOf = [
+                            new ElicitRequestParams.EnumSchemaOption()
+                            {
+                                Title = "Approve",
+                                Const = "approve",
+                            },
+                            new ElicitRequestParams.EnumSchemaOption()
+                            {
+                                Title = "Deny",
+                                Const = "deny",
+                            },
+                        ],
+                    }
+                }
+            }
+        }, cancellationToken);
+
+        if (result.Action is not "accept"
+            || result.Content is not { } content
+            || !content.TryGetValue("action", out var actionValue)
+            || actionValue.ValueKind is not JsonValueKind.String
+            || !actionValue.ValueEquals("approve"u8))
+        {
+            logger.LogWarning("User denied the tool call.");
+
+            return "Error: The user denied the tool call.";
+        }
+
+        logger.LogInformation("User approved the tool call. Invoking function {FunctionName} with arguments: {Arguments}", function.Name, context.Arguments);
+
+        if (function is TaskMcpClientTool taskTool)
+        {
+            logger.LogInformation("Calling function {FunctionName} as a task.", function.Name);
+
+            return await taskTool.CallWithPollingAsync(context.Arguments, cancellationToken: cancellationToken);
+        }
+
+        logger.LogInformation("Calling function {FunctionName} directly.", function.Name);
+
+        return await function.InvokeAsync(context.Arguments, cancellationToken);
+    }
+
+    private async Task<string> RunAgentAsync([Description("Agent")] string agent, [Description("Instruction")] string instruction, McpServer server)
     {
         logger.LogInformation("Running agent {Agent} with instruction: {Instruction}", agent, instruction);
 
@@ -24,7 +95,13 @@ internal class RunAgentProvider(IOptionsMonitor<Options> options, ILogger<RunAge
                 return $"No model runner found for agent {agent}";
             }
 
-            var result = await modelRunner.RunModelAsync(instruction);
+            ModelRunProperties properties = new()
+            {
+                Instruction = instruction,
+                OnFunctionCall = (function, cancellationToken) => HandleFunctionInvocationAsync(function, agent, server, cancellationToken)
+            };
+
+            var result = await modelRunner.RunModelAsync(properties);
 
             if (result is ModelRunResult.Failure failure)
             {

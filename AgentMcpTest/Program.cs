@@ -45,6 +45,9 @@ var client = await McpClient.CreateAsync(clientTransport, clientOptions, loggerF
 // Print the list of tools available from the server.
 foreach (var tool in await client.ListToolsAsync())
 {
+    // tool.CallAsync()
+    // tool.CallAsync()
+    // tool.InvokeAsync()
     Console.WriteLine(tool.ProtocolTool.InputSchema);
     Console.WriteLine($"Tool: {tool.JsonSchema}");
     Console.WriteLine($"{tool.Name} ({tool.Description})");

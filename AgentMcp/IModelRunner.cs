@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.AI;
 
 namespace AgentMcp;
 
@@ -13,7 +13,14 @@ internal abstract record ModelRunResult
     public sealed record Failure(string ErrorMessage) : ModelRunResult;
 }
 
+internal class ModelRunProperties
+{
+    public required string Instruction { get; init; }
+
+    public Func<FunctionInvocationContext, CancellationToken, ValueTask<object?>>? OnFunctionCall { get; init; }
+}
+
 internal interface IModelRunner
 {
-    public Task<ModelRunResult> RunModelAsync(string instruction, CancellationToken cancellationToken = default);
+    public Task<ModelRunResult> RunModelAsync(ModelRunProperties properties, CancellationToken cancellationToken = default);
 }

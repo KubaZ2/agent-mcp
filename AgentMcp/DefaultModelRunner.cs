@@ -2,21 +2,19 @@ using Microsoft.Extensions.AI;
 
 namespace AgentMcp;
 
-internal class DefaultModelRunner(IChatClient client, ChatOptions chatOptions, string? systemPrompt) : IModelRunner
+internal class DefaultModelRunner(FunctionInvokingChatClient client, ChatOptions options, string? systemPrompt) : IModelRunner
 {
-    private readonly FunctionInvokingChatClient _client = new(client);
-
-    public async Task<ModelRunResult> RunModelAsync(string instruction, CancellationToken cancellationToken = default)
+    public async Task<ModelRunResult> RunModelAsync(ModelRunProperties properties, CancellationToken cancellationToken = default)
     {
-        ChatMessage userMessage = new(ChatRole.User, instruction);
+        client.FunctionInvoker = properties.OnFunctionCall;
+
+        ChatMessage userMessage = new(ChatRole.User, properties.Instruction);
 
         IEnumerable<ChatMessage> messages = systemPrompt is null
             ? [userMessage]
             : [new(ChatRole.System, systemPrompt), userMessage];
 
-        var response = await _client.GetResponseAsync(messages,
-                                       chatOptions,
-                                       cancellationToken);
+        var response = await client.GetResponseAsync(messages, options, cancellationToken);
 
         return new ModelRunResult.Success(response.Text);
     }
