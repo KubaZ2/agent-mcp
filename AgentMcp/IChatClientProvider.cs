@@ -1,4 +1,5 @@
 using System.ClientModel;
+using System.ClientModel.Primitives;
 using Anthropic;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
@@ -18,6 +19,14 @@ internal class DefaultChatClientProvider(ILogger<DefaultChatClientProvider> logg
     private const int DefaultTimeoutSeconds = 1 << 10;
 
     private static TimeSpan DefaultTimeout => TimeSpan.FromSeconds(DefaultTimeoutSeconds);
+
+    private static HttpClient CreateHttpClient()
+    {
+        return new()
+        {
+            Timeout = DefaultTimeout,
+        };
+    }
 
     public ValueTask<IChatClient?> CreateChatClientAsync(AgentConfiguration agent)
     {
@@ -47,7 +56,9 @@ internal class DefaultChatClientProvider(ILogger<DefaultChatClientProvider> logg
     {
         OpenAIClientOptions clientOptions = new()
         {
-            NetworkTimeout = DefaultTimeout,
+            NetworkTimeout = Timeout.InfiniteTimeSpan,
+            RetryPolicy = new ClientRetryPolicy(0),
+            Transport = new HttpClientPipelineTransport(CreateHttpClient()),
         };
 
         if (provider.Endpoint is { } endpoint)
@@ -55,14 +66,6 @@ internal class DefaultChatClientProvider(ILogger<DefaultChatClientProvider> logg
 
         ChatClient rawClient = new(agent.Model, new ApiKeyCredential(provider.ApiKey ?? "-"), clientOptions);
         return rawClient.AsIChatClient();
-    }
-
-    private static HttpClient CreateHttpClient()
-    {
-        return new()
-        {
-            Timeout = DefaultTimeout,
-        };
     }
 
     private static AnthropicClient CreateAnthropicClient(AnthropicProviderConfiguration provider)
