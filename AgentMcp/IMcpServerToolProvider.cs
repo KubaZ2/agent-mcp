@@ -6,4 +6,3 @@ internal interface IMcpServerToolProvider
 {
     public McpServerTool GetTool();
 }
-

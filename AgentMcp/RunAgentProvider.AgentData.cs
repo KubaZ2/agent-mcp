@@ -1,0 +1,95 @@
+using System.Collections.Immutable;
+using System.Runtime.CompilerServices;
+using Microsoft.Extensions.AI;
+using ModelContextProtocol.Extensions.Tasks;
+
+using ElicitationHandler = System.Func<ModelContextProtocol.Protocol.ElicitRequestParams?, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<ModelContextProtocol.Protocol.ElicitResult>>;
+
+namespace AgentMcp;
+
+internal partial class RunAgentProvider
+{
+    private record AgentData(string Name, FunctionInvokingChatClient ChatClient, IReadOnlyList<AITool> Tools, string? SystemPrompt, StrongBox<ElicitationHandler> ElicitationHandler)
+    {
+        private class State(ImmutableHashSet<Task<GetTaskResult>> tasks, TaskCompletionSource<GetTaskResult?> completionSource)
+        {
+            public IEnumerable<Task<GetTaskResult?>> AwaitableTasks => tasks.Prepend(completionSource.Task!)!;
+
+            public ImmutableHashSet<Task<GetTaskResult>> ToolTasks => tasks;
+
+            public TaskCompletionSource<GetTaskResult?> CompletionSource => completionSource;
+        }
+
+        private byte _lock;
+
+        private State _state = new([], new(TaskCreationOptions.RunContinuationsAsynchronously));
+
+        public bool TryEnter()
+        {
+            return Interlocked.CompareExchange(ref _lock, 1, 0) is 0;
+        }
+
+        public void Exit()
+        {
+            Interlocked.Exchange(ref _lock, 0);
+        }
+
+        public void AddToolTask(Task<GetTaskResult> task)
+        {
+            var state = Volatile.Read(ref _state);
+
+            while (true)
+            {
+                State newState = new(state.ToolTasks.Add(task), new(TaskCreationOptions.RunContinuationsAsynchronously));
+
+                var oldState = Interlocked.CompareExchange(ref _state, newState, state);
+
+                if (oldState == state)
+                {
+                    _ = state.CompletionSource.TrySetResult(null);
+                    break;
+                }
+
+                state = oldState;
+            }
+        }
+
+        public async Task<GetTaskResult?> WaitForToolTaskCompletionAsync()
+        {
+            while (true)
+            {
+                var state = Volatile.Read(ref _state);
+
+                if (state.ToolTasks.IsEmpty)
+                    return null;
+
+                var completedTask = await Task.WhenAny(state.AwaitableTasks);
+
+                if (completedTask != state.CompletionSource.Task)
+                {
+                    RemoveCompletedTask(completedTask!);
+
+                    return completedTask.GetAwaiter().GetResult();
+                }
+            }
+        }
+
+        private void RemoveCompletedTask(Task<GetTaskResult> completedTask)
+        {
+            var state = Volatile.Read(ref _state);
+
+            while (true)
+            {
+                State newState = new(state.ToolTasks.Remove(completedTask), state.CompletionSource);
+
+                var oldState = Interlocked.CompareExchange(ref _state, newState, state);
+
+                if (oldState == state)
+                    break;
+
+                state = oldState;
+            }
+        }
+    }
+}
+

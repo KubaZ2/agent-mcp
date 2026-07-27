@@ -1,5 +1,4 @@
 using System.Collections.Frozen;
-using System.Collections.Immutable;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
@@ -7,7 +6,6 @@ using System.Text.Json.Nodes;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol;
-using ModelContextProtocol.Client;
 using ModelContextProtocol.Extensions.Tasks;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
@@ -16,143 +14,26 @@ using ElicitationHandler = System.Func<ModelContextProtocol.Protocol.ElicitReque
 
 namespace AgentMcp;
 
-internal class RunAgentProvider(IOptionsMonitor<Options> options, ILogger<RunAgentProvider> logger, IChatClientProvider chatClientProvider, IMcpClientProvider mcpClientProvider) : IMcpServerToolProvider, IHostedService
+internal partial class RunAgentProvider(IOptionsMonitor<Options> options, ILogger<RunAgentProvider> logger, IChatClientProvider chatClientProvider, IMcpClientProvider mcpClientProvider) : IMcpServerToolProvider, IHostedService
 {
-    private record AgentData(string Name, FunctionInvokingChatClient ChatClient, IReadOnlyList<AITool> Tools, string? SystemPrompt, StrongBox<ElicitationHandler> ElicitationHandler)
-    {
-        private class State(ImmutableHashSet<Task<GetTaskResult>> tasks, TaskCompletionSource<GetTaskResult?> completionSource)
-        {
-            public IEnumerable<Task<GetTaskResult?>> AwaitableTasks => tasks.Prepend(completionSource.Task!)!;
-
-            public ImmutableHashSet<Task<GetTaskResult>> ToolTasks => tasks;
-
-            public TaskCompletionSource<GetTaskResult?> CompletionSource => completionSource;
-        }
-
-        private byte _lock;
-
-        private State _state = new([], new(TaskCreationOptions.RunContinuationsAsynchronously));
-
-        public bool TryEnter()
-        {
-            return Interlocked.CompareExchange(ref _lock, 1, 0) is 0;
-        }
-
-        public void Exit()
-        {
-            Interlocked.Exchange(ref _lock, 0);
-        }
-
-        public void AddToolTask(Task<GetTaskResult> task)
-        {
-            var state = Volatile.Read(ref _state);
-
-            while (true)
-            {
-                State newState = new(state.ToolTasks.Add(task), new(TaskCreationOptions.RunContinuationsAsynchronously));
-
-                var oldState = Interlocked.CompareExchange(ref _state, newState, state);
-
-                if (oldState == state)
-                {
-                    _ = state.CompletionSource.TrySetResult(null);
-                    break;
-                }
-
-                state = oldState;
-            }
-        }
-
-        public async Task<GetTaskResult?> WaitForToolTaskCompletionAsync()
-        {
-            while (true)
-            {
-                var state = Volatile.Read(ref _state);
-
-                if (state.ToolTasks.IsEmpty)
-                    return null;
-
-                var completedTask = await Task.WhenAny(state.AwaitableTasks);
-
-                if (completedTask != state.CompletionSource.Task)
-                {
-                    RemoveCompletedTask(completedTask!);
-
-                    return completedTask.GetAwaiter().GetResult();
-                }
-            }
-        }
-
-        private void RemoveCompletedTask(Task<GetTaskResult> completedTask)
-        {
-            var state = Volatile.Read(ref _state);
-
-            while (true)
-            {
-                State newState = new(state.ToolTasks.Remove(completedTask), state.CompletionSource);
-
-                var oldState = Interlocked.CompareExchange(ref _state, newState, state);
-
-                if (oldState == state)
-                    break;
-
-                state = oldState;
-            }
-        }
-    }
-
     private FrozenDictionary<string, AgentData>? _agentData;
 
     private static JsonElement MarshalMcpResult<T>(T result)
     {
         return JsonSerializer.SerializeToElement(result, McpJsonUtilities.DefaultOptions.GetTypeInfo<T>());
     }
-    //
-    // private async ValueTask<ElicitResult> HandleElicitationAsync(ElicitRequestParams? request, CancellationToken cancellationToken)
-    // {
-    //     try
-    //     {
-    //         logger.LogInformation("Handling elicitation request");
-    //
-    //         if (request is null)
-    //         {
-    //             logger.LogWarning("Elicitation request is null");
-    //
-    //             return new ElicitResult();
-    //         }
-    //
-    //         logger.LogInformation("Elicitation request: {Request}", JsonSerializer.Serialize(request, McpJsonUtilities.DefaultOptions.GetTypeInfo<ElicitRequestParams>()));
-    //
-    //         ElicitResult? result = null;
-    //
-    //         ExecutionContext.Run(_currentExecutionContext!, _ =>
-    //         {
-    //             result = _currentServer!.ElicitAsync(request, cancellationToken).AsTask().GetAwaiter().GetResult();
-    //         }, null);
-    //
-    //         logger.LogInformation("Elicitation request handled successfully");
-    //
-    //         return result!;
-    //     }
-    //     catch (Exception ex)
-    //     {
-    //         logger.LogError(ex, "Error handling elicitation request: {Message}", ex.Message);
-    //
-    //         throw;
-    //     }
-    // }
-    //
+
     private async ValueTask<object?> HandleFunctionInvocationAsync(FunctionInvocationContext context, AgentData agent, McpServer server, CancellationToken cancellationToken)
     {
         var function = context.Function;
 
         logger.LogInformation("Agent {Agent} is requesting to call {FunctionName} with arguments: {Arguments}", agent.Name, function.Name, context.Arguments);
 
-        if (server.ClientCapabilities is not { Elicitation: { } })
+        if (!server.IsMrtrSupported && server.ClientCapabilities is not { Elicitation: { Form: { } } })
         {
-            logger.LogWarning("Client does not support function invocation.");
+            logger.LogWarning("Client does not support elicitation.");
 
-            return "Error: The client does not support function invocation.";
+            return "Error: The client does not support elicitation.";
         }
 
         var message = $"Agent {agent.Name} is requesting to call {function.Name}. Please select the action to take.";
@@ -228,6 +109,7 @@ internal class RunAgentProvider(IOptionsMonitor<Options> options, ILogger<RunAge
     private async Task<GetTaskResult> PollTaskAsync(CreateTaskResult taskCreated, McpClientToolWrapper tool, McpServer server, CancellationToken cancellationToken)
     {
         var pollIntervalMs = taskCreated.PollIntervalMs.GetValueOrDefault(1000);
+
         while (true)
         {
             await Task.Delay(TimeSpan.FromMilliseconds(pollIntervalMs), cancellationToken);
@@ -473,86 +355,13 @@ internal class RunAgentProvider(IOptionsMonitor<Options> options, ILogger<RunAge
         return tool;
     }
 
-    private sealed class McpClientToolWrapper : DelegatingAIFunction
-    {
-        private readonly string _serverName;
-
-        public McpClientToolWrapper(McpClientTool tool, string serverName) : base(tool)
-        {
-            _serverName = serverName;
-        }
-
-        public override string Name => $"{_serverName}_{base.Name}";
-
-        [UnsafeAccessor(UnsafeAccessorKind.Field, Name = "_client")]
-        private extern static ref McpClient GetClientCore(McpClientTool tool);
-
-        private McpClient Client => GetClientCore(Tool);
-
-        private McpClientTool Tool => Unsafe.As<McpClientTool>(InnerFunction);
-
-        public ValueTask<ResultOrCreatedTask<CallToolResult>> CallAsTaskAsync(IReadOnlyDictionary<string, object?>? arguments = null, CancellationToken cancellationToken = default)
-        {
-            return Client.CallToolAsTaskAsync(new()
-            {
-                Name = Tool.ProtocolTool.Name,
-                Arguments = ToArgumentsDictionary(arguments, JsonSerializerOptions),
-            }, cancellationToken);
-        }
-
-        public ValueTask<CallToolResult> CallWithPollingAsync(IReadOnlyDictionary<string, object?>? arguments = null, int maxConsecutiveStuckPolls = 60, CancellationToken cancellationToken = default)
-        {
-            return Client.CallToolWithPollingAsync(new()
-            {
-                Name = Tool.ProtocolTool.Name,
-                Arguments = ToArgumentsDictionary(arguments, JsonSerializerOptions),
-            }, maxConsecutiveStuckPolls, cancellationToken);
-        }
-
-        public async ValueTask<object?> InvokeWithPollingAsync(IReadOnlyDictionary<string, object?>? arguments = null, int maxConsecutiveStuckPolls = 60, CancellationToken cancellationToken = default)
-        {
-            var callToolResult = await CallWithPollingAsync(arguments, maxConsecutiveStuckPolls, cancellationToken);
-
-            return JsonSerializer.SerializeToElement(callToolResult, McpJsonUtilities.DefaultOptions.GetTypeInfo<CallToolResult>());
-        }
-
-        public ValueTask<GetTaskResult> GetTaskAsync(GetTaskRequestParams requestParams, CancellationToken cancellationToken = default)
-        {
-            return Client.GetTaskAsync(requestParams, cancellationToken);
-        }
-
-        public ValueTask<UpdateTaskResult> UpdateTaskAsync(UpdateTaskRequestParams requestParams, CancellationToken cancellationToken = default)
-        {
-            return Client.UpdateTaskAsync(requestParams, cancellationToken);
-        }
-
-        public ValueTask<CancelTaskResult> CancelTaskAsync(CancelTaskRequestParams requestParams, CancellationToken cancellationToken = default)
-        {
-            return Client.CancelTaskAsync(requestParams, cancellationToken);
-        }
-
-        private static Dictionary<string, JsonElement>? ToArgumentsDictionary(IReadOnlyDictionary<string, object?>? arguments, JsonSerializerOptions options)
-        {
-            var typeInfo = options.GetTypeInfo<object?>();
-            Dictionary<string, JsonElement>? dictionary = null;
-            if (arguments != null)
-            {
-                dictionary = new Dictionary<string, JsonElement>(arguments.Count);
-                foreach (KeyValuePair<string, object?> argument in arguments)
-                    dictionary.Add(argument.Key, (argument.Value is JsonElement jsonElement) ? jsonElement : JsonSerializer.SerializeToElement(argument.Value, typeInfo));
-            }
-
-            return dictionary;
-        }
-    }
-
-    private async Task<IReadOnlyList<AITool>> GetMcpToolsAsync(string mcpServerKey, ElicitationHandler elicitationHandler)
+    private async Task<IReadOnlyList<AITool>> GetMcpToolsAsync(string mcpServerKey, ElicitationHandler elicitationHandler, string agentName)
     {
         var mcpConfigs = options.CurrentValue.Mcp;
 
         if (mcpConfigs is null || !mcpConfigs.TryGetValue(mcpServerKey, out var mcpConfig))
         {
-            logger.LogWarning("MCP configuration for key '{Key}' not found in options", mcpServerKey);
+            logger.LogWarning("MCP server configuration '{ServerName}' not found, but agent '{AgentName}' references it. Ignoring it.", mcpServerKey, agentName);
 
             return [];
         }
@@ -574,14 +383,14 @@ internal class RunAgentProvider(IOptionsMonitor<Options> options, ILogger<RunAge
 
         if (mcpClient is null)
         {
-            logger.LogWarning("MCP client for key '{Key}' could not be created", mcpServerKey);
+            logger.LogWarning("MCP client for for MCP server '{ServerName}' could not be created for agent '{AgentName}'", mcpServerKey, agentName);
 
             return [];
         }
 
         var tools = await mcpClient.ListToolsAsync();
 
-        logger.LogInformation("Loaded {Count} functions from MCP server '{ServerName}' with key '{Key}'", tools.Count, mcpServerKey, mcpServerKey);
+        logger.LogInformation("Loaded {Count} functions from MCP server '{ServerName}' for agent '{AgentName}'", tools.Count, mcpServerKey, agentName);
 
         return [.. tools.Select(tool => new McpClientToolWrapper(tool, mcpServerKey))];
     }
@@ -601,7 +410,9 @@ internal class RunAgentProvider(IOptionsMonitor<Options> options, ILogger<RunAge
 
         ElicitationHandler elicitationHandler = (request, cancellationToken) => elicitationHandlerBox.Value!(request, cancellationToken);
 
-        var tools = agent.Mcp is { } mcpKeys ? (await Task.WhenAll(mcpKeys.Select(k => GetMcpToolsAsync(k, elicitationHandler)))).SelectMany(j => j).ToArray() : [];
+        IReadOnlyList<AITool> tools = agent.Mcp is { } mcpKeys
+            ? [.. (await Task.WhenAll(mcpKeys.Select(k => GetMcpToolsAsync(k, elicitationHandler, name)))).SelectMany(j => j)]
+            : [];
 
         AgentData agentData = new(name, functionInvokingChatClient, tools, agent.SystemPrompt, elicitationHandlerBox);
 
