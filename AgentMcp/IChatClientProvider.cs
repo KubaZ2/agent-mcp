@@ -15,6 +15,10 @@ internal interface IChatClientProvider
 
 internal class DefaultChatClientProvider(ILogger<DefaultChatClientProvider> logger, IOptions<Options> options) : IChatClientProvider
 {
+    private const int DefaultTimeoutSeconds = 1 << 10;
+
+    private static TimeSpan DefaultTimeout => TimeSpan.FromSeconds(DefaultTimeoutSeconds);
+
     public ValueTask<IChatClient?> CreateChatClientAsync(AgentConfiguration agent)
     {
         var providerKey = agent.Provider;
@@ -41,12 +45,24 @@ internal class DefaultChatClientProvider(ILogger<DefaultChatClientProvider> logg
 
     private static IChatClient CreateOpenAIClient(AgentConfiguration agent, OpenAIProviderConfiguration provider)
     {
-        OpenAIClientOptions clientOptions = new();
+        OpenAIClientOptions clientOptions = new()
+        {
+            NetworkTimeout = DefaultTimeout,
+        };
+
         if (provider.Endpoint is { } endpoint)
             clientOptions.Endpoint = new(endpoint);
 
         ChatClient rawClient = new(agent.Model, new ApiKeyCredential(provider.ApiKey ?? "-"), clientOptions);
         return rawClient.AsIChatClient();
+    }
+
+    private static HttpClient CreateHttpClient()
+    {
+        return new()
+        {
+            Timeout = DefaultTimeout,
+        };
     }
 
     private static AnthropicClient CreateAnthropicClient(AnthropicProviderConfiguration provider)
@@ -65,11 +81,11 @@ internal class DefaultChatClientProvider(ILogger<DefaultChatClientProvider> logg
             authorizations = [authorization];
         }
 
-        return new(baseUri: provider.Endpoint is { } endpoint ? new(endpoint) : null, authorizations: authorizations);
+        return new(CreateHttpClient(), provider.Endpoint is { } endpoint ? new(endpoint) : null, authorizations: authorizations);
     }
 
     private static OllamaClient CreateOllamaClient(OllamaProviderConfiguration provider)
     {
-        return new(baseUri: provider.Endpoint is { } endpoint ? new(endpoint) : null);
+        return new(CreateHttpClient(), provider.Endpoint is { } endpoint ? new(endpoint) : null);
     }
 }
