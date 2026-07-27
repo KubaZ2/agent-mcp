@@ -16,15 +16,13 @@ internal interface IChatClientProvider
 
 internal class DefaultChatClientProvider(ILogger<DefaultChatClientProvider> logger, IOptions<Options> options) : IChatClientProvider
 {
-    private const int DefaultTimeoutSeconds = 1 << 10;
+    private const double DefaultTimeoutSeconds = 1 << 10;
 
-    private static TimeSpan DefaultTimeout => TimeSpan.FromSeconds(DefaultTimeoutSeconds);
-
-    private static HttpClient CreateHttpClient()
+    private static HttpClient CreateHttpClient(double? timeoutSeconds)
     {
         return new()
         {
-            Timeout = DefaultTimeout,
+            Timeout = TimeSpan.FromSeconds(timeoutSeconds ?? DefaultTimeoutSeconds)
         };
     }
 
@@ -58,7 +56,7 @@ internal class DefaultChatClientProvider(ILogger<DefaultChatClientProvider> logg
         {
             NetworkTimeout = Timeout.InfiniteTimeSpan,
             RetryPolicy = new ClientRetryPolicy(0),
-            Transport = new HttpClientPipelineTransport(CreateHttpClient()),
+            Transport = new HttpClientPipelineTransport(CreateHttpClient(provider.TimeoutSeconds)),
         };
 
         if (provider.Endpoint is { } endpoint)
@@ -84,11 +82,11 @@ internal class DefaultChatClientProvider(ILogger<DefaultChatClientProvider> logg
             authorizations = [authorization];
         }
 
-        return new(CreateHttpClient(), provider.Endpoint is { } endpoint ? new(endpoint) : null, authorizations: authorizations);
+        return new(CreateHttpClient(provider.TimeoutSeconds), provider.Endpoint is { } endpoint ? new(endpoint) : null, authorizations: authorizations);
     }
 
     private static OllamaClient CreateOllamaClient(OllamaProviderConfiguration provider)
     {
-        return new(CreateHttpClient(), provider.Endpoint is { } endpoint ? new(endpoint) : null);
+        return new(CreateHttpClient(provider.TimeoutSeconds), provider.Endpoint is { } endpoint ? new(endpoint) : null);
     }
 }

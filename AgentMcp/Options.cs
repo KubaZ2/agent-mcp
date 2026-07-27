@@ -26,6 +26,8 @@ internal class OpenAIProviderConfiguration : IProviderConfiguration
     public string? ApiKey { get; set; }
 
     public string? Endpoint { get; set; }
+
+    public double? TimeoutSeconds { get; set; }
 }
 
 internal class AnthropicProviderConfiguration : IProviderConfiguration
@@ -33,11 +35,15 @@ internal class AnthropicProviderConfiguration : IProviderConfiguration
     public string? ApiKey { get; set; }
 
     public string? Endpoint { get; set; }
+
+    public double? TimeoutSeconds { get; set; }
 }
 
 internal class OllamaProviderConfiguration : IProviderConfiguration
 {
     public string? Endpoint { get; set; }
+
+    public double? TimeoutSeconds { get; set; }
 }
 
 internal class AgentConfiguration
