@@ -1,6 +1,7 @@
 using System.Collections.Frozen;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.AI;
@@ -302,20 +303,23 @@ internal partial class RunAgentProvider(IOptionsMonitor<Options> options, ILogge
         var jsonDescription = node["description"];
         if (jsonDescription is JsonValue jsonValue && jsonValue.TryGetValue<string>(out var description))
         {
-            if (description is not "Agent")
+            switch (description)
             {
-                if (description is "Instruction")
-                {
+                case "Agent":
+                    TransformAgentProperty(node);
+                    break;
+                case "Instruction":
                     node["description"] = "The instruction to give to the agent";
-
-                    return node;
-                }
+                    break;
             }
-
-            node["description"] = "The agent to run";
         }
 
-        JsonArray agentsSchema = [];
+        return node;
+    }
+
+    private void TransformAgentProperty(JsonNode node)
+    {
+        JsonArray agentsEnumSchema = [];
 
         var agents = options.CurrentValue.Agents;
 
@@ -323,21 +327,21 @@ internal partial class RunAgentProvider(IOptionsMonitor<Options> options, ILogge
         {
             logger.LogWarning("No agents found in options");
 
-            return node;
+            return;
         }
+
+        StringBuilder descriptionBuilder = new("The agent to run. Available agents:\n");
 
         foreach (var (name, agent) in agents)
         {
-            agentsSchema.Add((JsonNode)new JsonObject()
-            {
-                ["const"] = name,
-                ["description"] = agent.Description,
-            });
+            agentsEnumSchema.Add((JsonNode)JsonValue.Create(name));
+
+            descriptionBuilder.Append($"- {name}: {agent.Description}\n");
         }
 
-        node["oneOf"] = agentsSchema;
+        node["enum"] = agentsEnumSchema;
 
-        return node;
+        node["description"] = descriptionBuilder.ToString(0, descriptionBuilder.Length - 1);
     }
 
     public McpServerTool GetTool()
