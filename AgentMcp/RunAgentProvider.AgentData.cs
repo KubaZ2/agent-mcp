@@ -11,13 +11,13 @@ internal partial class RunAgentProvider
 {
     private record AgentData(string Name, FunctionInvokingChatClient ChatClient, IReadOnlyList<AITool> Tools, string? SystemPrompt, StrongBox<ElicitationHandler> ElicitationHandler)
     {
-        private class State(ImmutableHashSet<Task<GetTaskResult>> tasks, TaskCompletionSource<GetTaskResult?> completionSource)
+        private class State(ImmutableHashSet<Task<PollTaskResult>> tasks, TaskCompletionSource<PollTaskResult?> completionSource)
         {
-            public IEnumerable<Task<GetTaskResult?>> AwaitableTasks => tasks.Prepend(completionSource.Task!)!;
+            public IEnumerable<Task<PollTaskResult?>> AwaitableTasks => tasks.Prepend(completionSource.Task!)!;
 
-            public ImmutableHashSet<Task<GetTaskResult>> ToolTasks => tasks;
+            public ImmutableHashSet<Task<PollTaskResult>> ToolTasks => tasks;
 
-            public TaskCompletionSource<GetTaskResult?> CompletionSource => completionSource;
+            public TaskCompletionSource<PollTaskResult?> CompletionSource => completionSource;
         }
 
         private byte _lock;
@@ -34,7 +34,7 @@ internal partial class RunAgentProvider
             Interlocked.Exchange(ref _lock, 0);
         }
 
-        public void AddToolTask(Task<GetTaskResult> task)
+        public void AddToolTask(Task<PollTaskResult> task)
         {
             var state = Volatile.Read(ref _state);
 
@@ -54,7 +54,7 @@ internal partial class RunAgentProvider
             }
         }
 
-        public async Task<GetTaskResult?> WaitForToolTaskCompletionAsync()
+        public async Task<PollTaskResult?> WaitForToolTaskCompletionAsync()
         {
             while (true)
             {
@@ -74,7 +74,7 @@ internal partial class RunAgentProvider
             }
         }
 
-        private void RemoveCompletedTask(Task<GetTaskResult> completedTask)
+        private void RemoveCompletedTask(Task<PollTaskResult> completedTask)
         {
             var state = Volatile.Read(ref _state);
 

@@ -96,7 +96,7 @@ internal partial class RunAgentProvider(IOptionsMonitor<Options> options, ILogge
 
             logger.LogInformation("Function {FunctionName} started as a task with ID: {TaskId}. Polling for completion.", function.Name, taskCreated.TaskId);
 
-            agent.AddToolTask(PollTaskAsync(taskCreated, wrapper, server, cancellationToken));
+            agent.AddToolTask(PollTaskAsync(taskCreated, context.CallContent.CallId, wrapper, server, cancellationToken));
 
             return MarshalMcpResult(taskCreated);
         }
@@ -106,7 +106,9 @@ internal partial class RunAgentProvider(IOptionsMonitor<Options> options, ILogge
         return await function.InvokeAsync(context.Arguments, cancellationToken);
     }
 
-    private async Task<GetTaskResult> PollTaskAsync(CreateTaskResult taskCreated, McpClientToolWrapper tool, McpServer server, CancellationToken cancellationToken)
+    private record PollTaskResult(string CallId, GetTaskResult TaskResult);
+
+    private async Task<PollTaskResult> PollTaskAsync(CreateTaskResult taskCreated, string callId, McpClientToolWrapper tool, McpServer server, CancellationToken cancellationToken)
     {
         var pollIntervalMs = taskCreated.PollIntervalMs.GetValueOrDefault(1000);
 
@@ -133,13 +135,13 @@ internal partial class RunAgentProvider(IOptionsMonitor<Options> options, ILogge
                     {
                         logger.LogInformation("Task {TaskId} completed successfully.", taskCreated.TaskId);
 
-                        return getTaskResult;
+                        return new(callId, getTaskResult);
                     }
                 case McpTaskStatus.Failed:
                     {
                         logger.LogInformation("Task {TaskId} failed.", taskCreated.TaskId);
 
-                        return getTaskResult;
+                        return new(callId, getTaskResult);
                     }
                 case McpTaskStatus.InputRequired:
                     {
@@ -233,7 +235,7 @@ internal partial class RunAgentProvider(IOptionsMonitor<Options> options, ILogge
             if (result is null)
                 break;
 
-            if (result is not CompletedTaskResult completedTask)
+            if (result.TaskResult is not CompletedTaskResult completedTask)
             {
                 logger.LogWarning("Agent {Agent} received non-completed task result: {Result}", name, JsonSerializer.Serialize(result, McpTasksJsonContext.Default.GetTaskResult));
 
@@ -244,7 +246,7 @@ internal partial class RunAgentProvider(IOptionsMonitor<Options> options, ILogge
 
             var toolResultMessage = JsonSerializer.Deserialize(completedTask.Result, McpJsonUtilities.DefaultOptions.GetTypeInfo<CallToolResult>())!;
 
-            messages.Add(toolResultMessage.ToChatMessage(completedTask.TaskId));
+            messages.Add(toolResultMessage.ToChatMessage(result.CallId));
 
             response = await chatClient.GetResponseAsync(messages, new ChatOptions
             {
