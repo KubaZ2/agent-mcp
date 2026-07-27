@@ -18,14 +18,31 @@ switch (args)
         break;
 }
 
+HostApplicationBuilder CreateApplicationBuilder()
+{
+    return Host.CreateEmptyApplicationBuilder(new() { Args = args });
+}
+
+WebApplicationBuilder CreateWebApplicationBuilder()
+{
+    var builder = WebApplication.CreateEmptyBuilder(new() { Args = args });
+
+    builder.WebHost.UseKestrel();
+    builder.Services.AddRoutingCore();
+
+    return builder;
+}
+
 IHostApplicationBuilder builder = mode switch
 {
-    TransportMode.Stdio => Host.CreateEmptyApplicationBuilder(new() { Args = args }),
-    TransportMode.Http => WebApplication.CreateEmptyBuilder(new() { Args = args }),
+    TransportMode.Stdio => CreateApplicationBuilder(),
+    TransportMode.Http => CreateWebApplicationBuilder(),
     _ => throw new InvalidOperationException($"Unknown {nameof(TransportMode)}"),
 };
 
 var configuration = builder.Configuration;
+
+configuration.AddEnvironmentVariables();
 
 if (configuration.GetValue<string>("Config") is { } configPath)
     _ = Path.GetExtension(configPath) switch

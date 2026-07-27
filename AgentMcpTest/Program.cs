@@ -92,15 +92,15 @@ await Task.Delay(1000);
 
 var task = await client.CallToolAsTaskAsync(new()
 {
-    Name = "test"
+    // Name = "test"
     // Name = "get_name",
-    // Name = "run_agent",
-    // Arguments = new Dictionary<string, JsonElement>
-    // {
-    //     ["agent"] = JsonSerializer.SerializeToElement("chat"),
-    //     // ["instruction"] = JsonSerializer.SerializeToElement("Write a haiku about C#."),
-    //     ["instruction"] = JsonSerializer.SerializeToElement("run everything_trigger-elicitation-request"),
-    // }
+    Name = "run_agent",
+    Arguments = new Dictionary<string, JsonElement>
+    {
+        ["agent"] = JsonSerializer.SerializeToElement("chat"),
+        // ["instruction"] = JsonSerializer.SerializeToElement("Write a haiku about C#."),
+        ["instruction"] = JsonSerializer.SerializeToElement("list your tools"),
+    }
 });
 
 if (!task.IsTask)
