@@ -20,12 +20,20 @@ switch (args)
 
 IHostApplicationBuilder builder = mode switch
 {
-    TransportMode.Stdio => Host.CreateApplicationBuilder(args),
-    TransportMode.Http => WebApplication.CreateSlimBuilder(args),
+    TransportMode.Stdio => Host.CreateEmptyApplicationBuilder(new() { Args = args }),
+    TransportMode.Http => WebApplication.CreateEmptyBuilder(new() { Args = args }),
     _ => throw new InvalidOperationException($"Unknown {nameof(TransportMode)}"),
 };
 
-builder.Configuration.AddIniFile("appsettings.ini", optional: true, reloadOnChange: true);
+var configuration = builder.Configuration;
+
+if (configuration.GetValue<string>("Config") is { } configPath)
+    _ = Path.GetExtension(configPath) switch
+    {
+        ".json" => configuration.AddJsonFile(configPath, optional: false, reloadOnChange: true),
+        ".ini" => configuration.AddIniFile(configPath, optional: false, reloadOnChange: true),
+        var extenion => throw new InvalidOperationException($"Unknown config file extension '{extenion}'"),
+    };
 
 builder.Logging.AddConsole(consoleLogOptions =>
 {
