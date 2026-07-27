@@ -270,7 +270,7 @@ internal partial class RunAgentProvider(IOptionsMonitor<Options> options, ILogge
             {
                 logger.LogWarning("No agent data found for agent {Agent}", agent);
 
-                return $"No agent data found for agent {agent}";
+                return $"Agent '{agent}' does not exist.";
             }
 
             if (!agentData.TryEnter())
