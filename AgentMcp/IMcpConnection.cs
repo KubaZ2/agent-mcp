@@ -4,6 +4,11 @@ using ModelContextProtocol.Protocol;
 
 namespace AgentMcp;
 
+internal class McpServerConnectionProperties
+{
+    public Func<ElicitRequestParams?, CancellationToken, ValueTask<ElicitResult>>? ElicitationHandler { get; init; }
+}
+
 internal interface IMcpServerConnection
 {
     public ValueTask<IList<McpClientTool>> GetToolsAsync();

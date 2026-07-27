@@ -1,5 +1,6 @@
 ﻿using AgentMcp;
 using Microsoft.Extensions.Options;
+using ModelContextProtocol.Client;
 using ModelContextProtocol.Extensions.Tasks;
 
 TransportMode mode;
@@ -45,11 +46,15 @@ _ = mode switch
     _ => throw new InvalidOperationException($"Unknown {nameof(TransportMode)}"),
 };
 
-services
-    .AddSingleton<IModelRunnerProvider, DefaultModelRunnerProvider>();
+// services.AddSingleton<IModelRunnerProvider, DefaultModelRunnerProvider>();
 
-services.AddSingleton<IMcpServerConnectionProvider, DefaultMcpServerConnectionProvider>();
-services.AddSingleton<IMcpServerOrchestrator, DefaultMcpServerOrchestrator>();
+services.AddSingleton<IChatClientProvider, DefaultChatClientProvider>();
+services.AddSingleton<IMcpClientProvider, DefaultMcpClientProvider>();
+// services.AddSingleton<IMcpClientLoader, DefaultMcpClientLoader>();
+
+
+// services.AddSingleton<IMcpServerConnectionProvider, DefaultMcpServerConnectionProvider>();
+// services.AddSingleton<IMcpServerOrchestrator, DefaultMcpServerOrchestrator>();
 
 services.AddSingleton<RunAgentProvider>();
 services.AddHostedService(services => services.GetRequiredService<RunAgentProvider>());

@@ -8,5 +8,5 @@ internal record McpServerInfo(McpServerConnectionInfo ConnectionInfo, IReadOnlyL
 
 internal interface IMcpServerOrchestrator
 {
-    public Task<IReadOnlyList<McpServerInfo>> RunAsync(IReadOnlyList<string> mcpServerKeys);
+    public Task<IReadOnlyList<McpServerInfo>> RunAsync(IReadOnlyList<string> mcpServerKeys, McpServerConnectionProperties properties);
 }

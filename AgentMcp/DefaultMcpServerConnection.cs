@@ -15,7 +15,7 @@ internal class DefaultMcpServerConnection : IMcpServerConnection
         _logger = logger;
     }
 
-    public static async Task<DefaultMcpServerConnection?> CreateAsync(McpServerConfiguration serverInfo, ILogger logger)
+    public static async Task<DefaultMcpServerConnection?> CreateAsync(McpServerConfiguration serverInfo, McpServerConnectionProperties properties, ILogger logger)
     {
         IClientTransport? transport = serverInfo switch
         {
@@ -34,7 +34,25 @@ internal class DefaultMcpServerConnection : IMcpServerConnection
         if (transport is null)
             return null;
 
-        var client = await McpClient.CreateAsync(transport);
+        McpClientOptions options = new();
+
+        if (properties.ElicitationHandler is { } elicitationHandler)
+        {
+            options.Capabilities = new()
+            {
+                Elicitation = new()
+                {
+                    Form = new(),
+                },
+            };
+
+            options.Handlers = new()
+            {
+                ElicitationHandler = elicitationHandler,
+            };
+        }
+
+        var client = await McpClient.CreateAsync(transport, options);
 
         return new(client, logger);
     }

@@ -7,6 +7,7 @@ internal class DefaultMcpServerOrchestrator(IOptions<Options> options,
                                             ILogger<DefaultMcpServerOrchestrator> logger) : IMcpServerOrchestrator
 {
     private async Task<McpServerInfo?> ConnectAsync(string key,
+                                                    McpServerConnectionProperties properties,
                                                     IReadOnlyDictionary<string, McpServerConfiguration> mcpServers)
     {
         if (!mcpServers.TryGetValue(key, out var info))
@@ -15,7 +16,7 @@ internal class DefaultMcpServerOrchestrator(IOptions<Options> options,
             return null;
         }
 
-        var connection = await provider.CreateAsync(info);
+        var connection = await provider.CreateAsync(info, properties);
 
         var name = info.Name ?? key;
 
@@ -32,7 +33,7 @@ internal class DefaultMcpServerOrchestrator(IOptions<Options> options,
         return new(connectionInfo, [.. tools]);
     }
 
-    public async Task<IReadOnlyList<McpServerInfo>> RunAsync(IReadOnlyList<string> mcpServerKeys)
+    public async Task<IReadOnlyList<McpServerInfo>> RunAsync(IReadOnlyList<string> mcpServerKeys, McpServerConnectionProperties properties)
     {
         if (options.Value.Mcp is not { Count: > 0 } mcpServers)
         {
@@ -41,7 +42,7 @@ internal class DefaultMcpServerOrchestrator(IOptions<Options> options,
             return [];
         }
 
-        return (await Task.WhenAll(mcpServerKeys.Select(key => ConnectAsync(key, mcpServers)))).Where(info => info is not null).ToArray()!;
+        return (await Task.WhenAll(mcpServerKeys.Select(key => ConnectAsync(key, properties, mcpServers)))).Where(info => info is not null).ToArray()!;
     }
 }
 

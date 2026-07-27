@@ -1,40 +1,31 @@
 using System.ClientModel;
 using Anthropic;
 using Microsoft.Extensions.AI;
-using ModelContextProtocol.Client;
+using Microsoft.Extensions.Options;
 using Ollama;
 using OpenAI;
 using OpenAI.Chat;
 
 namespace AgentMcp;
 
-internal partial class DefaultModelRunnerProvider(IMcpServerOrchestrator orchestrator) : IModelRunnerProvider
+internal interface IChatClientProvider
 {
-    public async Task<IModelRunner?> CreateModelRunnerAsync(string name, AgentConfiguration agent, Options options, McpServerConnectionProperties mcpServerConnectionProperties)
+    public ValueTask<IChatClient?> CreateChatClientAsync(AgentConfiguration agent);
+}
+
+internal class DefaultChatClientProvider(ILogger<DefaultChatClientProvider> logger, IOptions<Options> options) : IChatClientProvider
+{
+    public ValueTask<IChatClient?> CreateChatClientAsync(AgentConfiguration agent)
     {
-        if (!options.Providers.TryGetValue(agent.Provider, out var provider))
-            return null;
-
-        var mcpInfos = agent.Mcp is { } mcpKeys
-            ? await orchestrator.RunAsync(mcpKeys, mcpServerConnectionProperties)
-            : [];
-
-        var tools = mcpInfos.SelectMany(info =>
+        var providerKey = agent.Provider;
+        if (!options.Value.Providers.TryGetValue(providerKey, out var provider))
         {
-            var serverName = info.ConnectionInfo.ServerName;
+            logger.LogWarning("Provider '{Provider}' is not defined in the configuration but is referenced by an agent.", providerKey);
 
-            return info.Tools.Select(tool =>
-            {
-                AIFunction function = new NamespacedAIFunction(tool, serverName);
+            return default;
+        }
 
-                if (tool is McpClientTool mcpClientTool)
-                    function = new TaskMcpClientTool(function, mcpClientTool);
-
-                return function;
-            });
-        }).ToArray();
-
-        IChatClient client = provider switch
+        var client = provider switch
         {
             OpenAIProviderConfiguration openAIProvider => CreateOpenAIClient(agent, openAIProvider),
             AnthropicProviderConfiguration anthropicProvider => CreateAnthropicClient(anthropicProvider),
@@ -42,13 +33,10 @@ internal partial class DefaultModelRunnerProvider(IMcpServerOrchestrator orchest
             _ => throw new NotSupportedException($"Provider type {provider.GetType().Name} is not supported.")
         };
 
-        ChatOptions chatOptions = new()
+        return new(client.AsBuilder().ConfigureOptions(o =>
         {
-            Tools = tools,
-            ModelId = agent.Model,
-        };
-
-        return new DefaultModelRunner(new FunctionInvokingChatClient(client), chatOptions, agent.SystemPrompt);
+            o.ModelId ??= agent.Model;
+        }).Build());
     }
 
     private static IChatClient CreateOpenAIClient(AgentConfiguration agent, OpenAIProviderConfiguration provider)

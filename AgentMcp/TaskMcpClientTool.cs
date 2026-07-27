@@ -32,6 +32,13 @@ internal sealed class TaskMcpClientTool(AIFunction function, McpClientTool tool)
         }, maxConsecutiveStuckPolls, cancellationToken);
     }
 
+    public async ValueTask<object?> InvokeWithPollingAsync(IReadOnlyDictionary<string, object?>? arguments = null, int maxConsecutiveStuckPolls = 60, CancellationToken cancellationToken = default)
+    {
+        var callToolResult = await CallWithPollingAsync(arguments, maxConsecutiveStuckPolls, cancellationToken);
+
+        return JsonSerializer.SerializeToElement(callToolResult, McpJsonUtilities.DefaultOptions.GetTypeInfo<CallToolResult>());
+    }
+
     private static Dictionary<string, JsonElement>? ToArgumentsDictionary(IReadOnlyDictionary<string, object?>? arguments, JsonSerializerOptions options)
     {
         JsonTypeInfo<object?> typeInfo = options.GetTypeInfo<object?>();

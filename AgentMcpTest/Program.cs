@@ -17,17 +17,24 @@ var loggerFactory = LoggerFactory.Create(builder =>
     builder.SetMinimumLevel(LogLevel.Debug);
 });
 
-var clientTransport = new StdioClientTransport(new StdioClientTransportOptions
-{
-    Command = "dotnet",
-    Arguments = ["AgentMcp.dll"],
-    WorkingDirectory = "../../../../AgentMcp/bin/Debug/net10.0"
-}, loggerFactory);
-
-// var clientTransport = new HttpClientTransport(new()
+// var clientTransport = new StdioClientTransport(new StdioClientTransportOptions
 // {
-//     Endpoint = new("http://localhost:5000"),
+//     Command = "dotnet",
+//     Arguments = ["McpBugRepro.dll"],
+//     WorkingDirectory = "/home/kuba/repos/McpBugRepro/bin/Debug/net10.0"
 // }, loggerFactory);
+
+// var clientTransport = new StdioClientTransport(new StdioClientTransportOptions
+// {
+//     Command = "dotnet",
+//     Arguments = ["AgentMcp.dll"],
+//     WorkingDirectory = "../../../../AgentMcp/bin/Debug/net10.0"
+// }, loggerFactory);
+
+var clientTransport = new HttpClientTransport(new()
+{
+    Endpoint = new("http://localhost:5000"),
+}, loggerFactory);
 
 McpClientOptions clientOptions = new()
 {
@@ -41,6 +48,8 @@ McpClientOptions clientOptions = new()
 };
 
 var client = await McpClient.CreateAsync(clientTransport, clientOptions, loggerFactory);
+
+// client.ServerCapabilities.
 
 // Print the list of tools available from the server.
 foreach (var tool in await client.ListToolsAsync())
@@ -66,16 +75,39 @@ foreach (var tool in await client.ListToolsAsync())
 
 await Task.Delay(1000);
 
+// var result = await client.CallToolAsync(new CallToolRequestParams()
+// {
+//     // Name = "get_name",
+//     // Name = "run_agent",
+//     Name = "test",
+//     // Arguments = new Dictionary<string, JsonElement>
+//     // {
+//     //     ["agent"] = JsonSerializer.SerializeToElement("chat"),
+//     //     // ["instruction"] = JsonSerializer.SerializeToElement("Write a haiku about C#."),
+//     //     ["instruction"] = JsonSerializer.SerializeToElement("run everything_trigger-elicitation-request"),
+//     // }
+// });
+//
+// Console.WriteLine(JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true }));
+
 var task = await client.CallToolAsTaskAsync(new()
 {
+    Name = "test"
     // Name = "get_name",
-    Name = "run_agent",
-    Arguments = new Dictionary<string, JsonElement>
-    {
-        ["agent"] = JsonSerializer.SerializeToElement("code-writer"),
-        ["instruction"] = JsonSerializer.SerializeToElement("Write a haiku about C#."),
-    }
+    // Name = "run_agent",
+    // Arguments = new Dictionary<string, JsonElement>
+    // {
+    //     ["agent"] = JsonSerializer.SerializeToElement("chat"),
+    //     // ["instruction"] = JsonSerializer.SerializeToElement("Write a haiku about C#."),
+    //     ["instruction"] = JsonSerializer.SerializeToElement("run everything_trigger-elicitation-request"),
+    // }
 });
+
+if (!task.IsTask)
+{
+    Console.WriteLine($"Tool call did not return a task. Result: {JsonSerializer.Serialize(task.Result, new JsonSerializerOptions { WriteIndented = true })}");
+    return;
+}
 
 var id = task.TaskCreated!.TaskId;
 
