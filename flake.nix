@@ -47,13 +47,6 @@
           ];
 
           DOTNET_ROOT = dotnetRoot;
-
-          SWIFT_LINK_FLAGS = pkgs.lib.optionalString pkgs.stdenv.hostPlatform.isDarwin (
-            builtins.concatStringsSep ";" [
-              "-L${pkgs.swiftPackages.swift-unwrapped.lib}/lib/swift/macosx"
-              "-L${pkgs.swiftPackages.swift-unwrapped}/lib/swift/macosx"
-            ]
-          );
         };
       }
     );

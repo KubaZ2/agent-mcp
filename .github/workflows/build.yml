@@ -22,7 +22,7 @@ jobs:
             shell: pwsh
 
           - runs-on: macos-15
-            use-nix: true
+            use-nix: false
             shell: nix develop -c bash -eo pipefail {0}
 
           - runs-on: ubuntu-latest
