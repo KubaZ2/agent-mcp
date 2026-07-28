@@ -24,7 +24,7 @@ jobs:
             shell: pwsh
 
           - runs-on: macos-15
-            rid: osx-x64
+            rid: osx-arm64
             use-nix: false
             shell: bash -eo pipefail {0}
 
