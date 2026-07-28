@@ -22,7 +22,7 @@
         pkgs = nixpkgs.legacyPackages.${arch};
         lib = pkgs.lib;
 
-        dotnet = pkgs.dotnetCorePackages.sdk_10_0-bin;
+        dotnet = pkgs.dotnetCorePackages.sdk_11_0-bin;
         dotnetRoot = "${dotnet.unwrapped}/share/dotnet";
       in
       {
