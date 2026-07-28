@@ -23,7 +23,7 @@ jobs:
 
           - runs-on: macos-15
             use-nix: false
-            shell: nix develop -c bash -eo pipefail {0}
+            shell: bash -eo pipefail {0}
 
           - runs-on: ubuntu-latest
             use-nix: true
