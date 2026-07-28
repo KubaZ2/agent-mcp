@@ -43,9 +43,6 @@ jobs:
       run:
         shell: ${{ matrix.shell }}
 
-    env:
-      RID: ${{ matrix.rid }}
-
     steps:
     - uses: actions/checkout@v4
 
@@ -73,11 +70,11 @@ jobs:
       run: dotnet test -c Release --no-build --no-restore --verbosity normal
 
     - name: Publish
-      run: dotnet publish AgentMcp -c Release -r $RID --no-build --no-restore
+      run: dotnet publish AgentMcp -c Release -r ${{ matrix.rid }} --no-build --no-restore
 
     - name: Upload artifacts
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
-        name: AgentMcp-${{ env.RID }}
+        name: AgentMcp-${{ matrix.rid }}
         path: |
-          AgentMcp/bin/Release/${{ env.RID }}/publish
+          AgentMcp/bin/Release/${{ matrix.rid }}/publish
