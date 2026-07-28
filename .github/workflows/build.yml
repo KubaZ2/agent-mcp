@@ -67,10 +67,10 @@ jobs:
       run: dotnet restore
 
     - name: Build
-      run: dotnet build -c Release -r $RID --no-restore --warnaserror
+      run: dotnet build -c Release --no-restore --warnaserror
 
     - name: Test
-      run: dotnet test -c Release -r $RID --no-build --no-restore --verbosity normal
+      run: dotnet test -c Release --no-build --no-restore --verbosity normal
 
     - name: Publish
       run: dotnet publish AgentMcp -c Release -r $RID --no-build --no-restore
