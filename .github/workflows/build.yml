@@ -13,7 +13,17 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runs-on: windows-latest
+          - runs-on: ubuntu-24.04
+            rid: linux-x64
+            use-nix: true
+            shell: nix develop -c bash -eo pipefail {0}
+
+          - runs-on: ubuntu-24.04-arm
+            rid: linux-arm64
+            use-nix: true
+            shell: nix develop -c bash -eo pipefail {0}
+
+          - runs-on: windows-2025
             rid: win-x64
             use-nix: false
             shell: pwsh
@@ -23,20 +33,15 @@ jobs:
             use-nix: false
             shell: pwsh
 
-          - runs-on: macos-15
-            rid: osx-arm64
+          - runs-on: macos-26-intel
+            rid: osx-x64
             use-nix: false
             shell: bash -eo pipefail {0}
 
-          - runs-on: ubuntu-latest
-            rid: linux-x64
-            use-nix: true
-            shell: nix develop -c bash -eo pipefail {0}
-
-          - runs-on: ubuntu-24.04-arm
-            rid: linux-arm64
-            use-nix: true
-            shell: nix develop -c bash -eo pipefail {0}
+          - runs-on: macos-26
+            rid: osx-arm64
+            use-nix: false
+            shell: bash -eo pipefail {0}
 
     runs-on: ${{ matrix.runs-on }}
     defaults:
@@ -70,7 +75,7 @@ jobs:
       run: dotnet test -c Release --no-build --no-restore --verbosity normal
 
     - name: Publish
-      run: dotnet publish AgentMcp -c Release -r ${{ matrix.rid }} --no-build --no-restore
+      run: dotnet publish AgentMcp -c Release -r ${{ matrix.rid }} --no-build --no-restore -o AgentMcp/bin/Release/${{ matrix.rid }}/publish
 
     - name: Upload artifacts
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
