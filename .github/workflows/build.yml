@@ -14,22 +14,27 @@ jobs:
       matrix:
         include:
           - runs-on: windows-latest
+            rid: win-x64
             use-nix: false
             shell: pwsh
 
           - runs-on: windows-11-arm
+            rid: win-arm64
             use-nix: false
             shell: pwsh
 
           - runs-on: macos-15
+            rid: osx-x64
             use-nix: false
             shell: bash -eo pipefail {0}
 
           - runs-on: ubuntu-latest
+            rid: linux-x64
             use-nix: true
             shell: nix develop -c bash -eo pipefail {0}
 
           - runs-on: ubuntu-24.04-arm
+            rid: linux-arm64
             use-nix: true
             shell: nix develop -c bash -eo pipefail {0}
 
@@ -37,6 +42,9 @@ jobs:
     defaults:
       run:
         shell: ${{ matrix.shell }}
+
+    env:
+      RID: ${{ matrix.rid }}
 
     steps:
     - uses: actions/checkout@v4
@@ -59,17 +67,17 @@ jobs:
       run: dotnet restore
 
     - name: Build
-      run: dotnet build -c Release --no-restore --warnaserror
+      run: dotnet build -c Release -r $RID --no-restore --warnaserror
 
     - name: Test
-      run: dotnet test -c Release --no-build --no-restore --verbosity normal
+      run: dotnet test -c Release -r $RID --no-build --no-restore --verbosity normal
 
     - name: Publish
-      run: dotnet publish AgentMcp -c Release --no-build --no-restore -o AgentMcp/bin/Release/publish
+      run: dotnet publish AgentMcp -c Release -r $RID --no-build --no-restore
 
     - name: Upload artifacts
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
-        name: build-artifacts
+        name: AgentMcp-${{ env.RID }}
         path: |
-          AgentMcp/bin/Release/publish/
+          AgentMcp/bin/Release/${{ env.RID }}/publish
