@@ -48,7 +48,7 @@
 
           DOTNET_ROOT = dotnetRoot;
 
-          NIX_LDFLAGS = pkgs.lib.optionalString pkgs.stdenv.hostPlatform.isDarwin "-L${pkgs.swiftPackages.swift-unwrapped.lib}/lib/swift/macosx";
+          SWIFT_LIB_PATH = pkgs.lib.optionalString pkgs.stdenv.hostPlatform.isDarwin "${pkgs.swiftPackages.swift-unwrapped.lib}/lib/swift/macosx";
         };
       }
     );
