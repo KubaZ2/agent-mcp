@@ -27,7 +27,12 @@
       in
       {
         default = pkgs.mkShell.override {
-          stdenv = if pkgs.stdenv.hostPlatform.isDarwin then pkgs.swiftPackages.stdenv else pkgs.stdenv;
+          stdenv = if pkgs.stdenv.hostPlatform.isDarwin then
+            pkgs.swiftPackages.stdenv.override (old: {
+              hostPlatform = old.hostPlatform // { darwinMinVersion = "12.0"; };
+              targetPlatform = old.targetPlatform // { darwinMinVersion = "12.0"; };
+            })
+          else pkgs.stdenv;
         } {
           packages = [
             dotnet
