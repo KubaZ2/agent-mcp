@@ -20,15 +20,25 @@
     devShells = forAllArch (arch:
       let
         pkgs = nixpkgs.legacyPackages.${arch};
+        lib = pkgs.lib;
 
         dotnet = pkgs.dotnetCorePackages.sdk_10_0-bin;
         dotnetRoot = "${dotnet.unwrapped}/share/dotnet";
       in
       {
-        default = pkgs.mkShell {
+        default = pkgs.mkShell.override {
+          stdenv = if pkgs.stdenv.hostPlatform.isDarwin then pkgs.swiftPackages.stdenv else pkgs.stdenv;
+        } {
           packages = [
             dotnet
             pkgs.nodejs_26
+          ];
+
+          buildInputs = [
+            pkgs.zlib
+          ] ++ lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
+            pkgs.swiftPackages.swift
+            pkgs.darwin.ICU
           ];
 
           DOTNET_ROOT = dotnetRoot;
