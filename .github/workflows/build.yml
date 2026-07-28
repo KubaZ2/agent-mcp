@@ -13,33 +13,23 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - rid: win-x64
-            runs-on: windows-latest
+          - runs-on: windows-latest
             use-nix: false
             shell: pwsh
 
-          - rid: win-arm64
-            runs-on: windows-11-arm
+          - runs-on: windows-11-arm
             use-nix: false
             shell: pwsh
 
-          - rid: osx-x64
-            runs-on: macos-15-intel
+          - runs-on: macos-15
             use-nix: true
             shell: nix develop -c bash -eo pipefail {0}
 
-          - rid: osx-arm64
-            runs-on: macos-15
+          - runs-on: ubuntu-latest
             use-nix: true
             shell: nix develop -c bash -eo pipefail {0}
 
-          - rid: linux-x64
-            runs-on: ubuntu-latest
-            use-nix: true
-            shell: nix develop -c bash -eo pipefail {0}
-
-          - rid: linux-arm64
-            runs-on: ubuntu-24.04-arm
+          - runs-on: ubuntu-24.04-arm
             use-nix: true
             shell: nix develop -c bash -eo pipefail {0}
 
