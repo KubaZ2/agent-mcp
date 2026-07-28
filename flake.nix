@@ -20,9 +20,14 @@
     devShells = forAllArch (arch:
       let
         pkgs = nixpkgs.legacyPackages.${arch};
-        lib = pkgs.lib;
 
-        dotnet = pkgs.dotnetCorePackages.sdk_11_0-bin;
+        globalJson = builtins.fromJSON (builtins.readFile ./global.json);
+        version = builtins.splitVersion globalJson.sdk.version;
+
+        major = builtins.elemAt version 0;
+        minor = builtins.elemAt version 1;
+
+        dotnet = pkgs.dotnetCorePackages."sdk_${major}_${minor}-bin";
         dotnetRoot = "${dotnet.unwrapped}/share/dotnet";
       in
       {
@@ -36,7 +41,7 @@
 
           buildInputs = [
             pkgs.zlib
-          ] ++ lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
+          ] ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
             pkgs.swiftPackages.swift
             pkgs.darwin.ICU
           ];
