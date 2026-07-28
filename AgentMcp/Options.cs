@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Options;
 
 internal partial class Options
@@ -15,6 +16,64 @@ internal partial class Options
 
     [ValidateEnumeratedItems]
     public IEnumerable<AgentConfiguration>? AgentValues => Agents?.Values;
+
+    internal void ConfigureProviders(IConfiguration configuration, IServiceProvider services)
+    {
+        var section = configuration.GetSection("Providers");
+
+        Dictionary<string, IProviderConfiguration> providers = [];
+
+        foreach (var providerSection in section.GetChildren())
+        {
+            var providerName = providerSection.Key;
+
+            var type = providerSection.GetValue<string>("Type")
+                ?? throw new InvalidOperationException($"Provider '{providerName}' is missing the 'Type' property.");
+
+            const StringComparison c = StringComparison.InvariantCultureIgnoreCase;
+
+            IProviderConfiguration? provider = type switch
+            {
+                _ when type.Equals("openai", c) => Validated(providerSection.Get<OpenAIProviderConfiguration>(), services, type, providerName),
+                _ when type.Equals("anthropic", c) => Validated(providerSection.Get<AnthropicProviderConfiguration>(), services, type, providerName),
+                _ when type.Equals("ollama", c) => Validated(providerSection.Get<OllamaProviderConfiguration>(), services, type, providerName),
+                _ => throw new InvalidOperationException($"Unknown provider type '{type}' for provider '{providerName}'."),
+            };
+
+            if (!providers.TryAdd(providerName, provider))
+                throw new InvalidOperationException($"Duplicate provider name '{providerName}' found in configuration.");
+        }
+
+        Providers = providers;
+
+        static T Validated<T>(T? provider, IServiceProvider services, string type, string providerName) where T : class, IProviderConfiguration
+        {
+            if (provider is null)
+                ThrowBindingFailed(providerName, type);
+
+            foreach (var validateOptions in services.GetServices<IValidateOptions<T>>())
+            {
+                var validationResult = validateOptions.Validate(null, provider);
+
+                if (validationResult.Failed)
+                    ThrowValidationFailed(providerName, type, validationResult.FailureMessage);
+            }
+
+            return provider;
+
+            [DoesNotReturn]
+            static void ThrowBindingFailed(string providerName, string type)
+            {
+                throw new InvalidOperationException($"Provider '{providerName}' of type '{type}' could not be bind to a configuration object.");
+            }
+
+            [DoesNotReturn]
+            static void ThrowValidationFailed(string providerName, string type, string failureMessage)
+            {
+                throw new InvalidOperationException($"Provider '{providerName}' of type '{type}' failed validation: {failureMessage}");
+            }
+        }
+    }
 }
 
 internal interface IProviderConfiguration

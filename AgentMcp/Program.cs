@@ -1,4 +1,5 @@
-﻿using AgentMcp;
+﻿using System.Diagnostics.CodeAnalysis;
+using AgentMcp;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Extensions.Tasks;
 
@@ -81,38 +82,7 @@ services.AddSingleton<IValidateOptions<Options>, Options.Validator>();
 
 services
     .AddOptions<Options>()
-    .Configure((Options options, IConfiguration configuration) =>
-    {
-        var section = configuration.GetSection("Providers");
-
-        Dictionary<string, IProviderConfiguration> providers = [];
-
-        foreach (var providerSection in section.GetChildren())
-        {
-            var providerName = providerSection.Key;
-
-            var type = providerSection.GetValue<string>("Type")
-                ?? throw new InvalidOperationException($"Provider '{providerName}' is missing the 'Type' property.");
-
-            const StringComparison c = StringComparison.InvariantCultureIgnoreCase;
-
-            IProviderConfiguration? providerInfo = type switch
-            {
-                _ when type.Equals("openai", c) => providerSection.Get<OpenAIProviderConfiguration>(),
-                _ when type.Equals("anthropic", c) => providerSection.Get<AnthropicProviderConfiguration>(),
-                _ when type.Equals("ollama", c) => providerSection.Get<OllamaProviderConfiguration>(),
-                _ => throw new InvalidOperationException($"Unknown provider type '{type}' for provider '{providerName}'."),
-            };
-
-            if (providerInfo is null)
-                throw new InvalidOperationException($"Provider '{providerName}' of type '{type}' could not be bind to a configuration object.");
-
-            if (!providers.TryAdd(providerName, providerInfo))
-                throw new InvalidOperationException($"Duplicate provider name '{providerName}' found in configuration.");
-        }
-
-        options.Providers = providers;
-    })
+    .Configure((Options options, IConfiguration configuration, IServiceProvider services) => options.ConfigureProviders(configuration, services))
     .BindConfiguration(string.Empty);
 
 IHost host = mode switch
