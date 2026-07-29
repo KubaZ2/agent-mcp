@@ -38,7 +38,7 @@ jobs:
             use-nix: false
             shell: bash -eo pipefail {0}
 
-          - runs-on: macos-26
+          - runs-on: macos-15 # Not macos-26 because of https://github.com/dotnet/runtime/issues/119380
             rid: osx-arm64
             use-nix: false
             shell: bash -eo pipefail {0}
