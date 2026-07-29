@@ -21,14 +21,29 @@
       let
         pkgs = nixpkgs.legacyPackages.${arch};
 
-        dotnet = pkgs.dotnetCorePackages.sdk_10_0-bin;
+        globalJson = builtins.fromJSON (builtins.readFile ./global.json);
+        version = builtins.splitVersion globalJson.sdk.version;
+
+        major = builtins.elemAt version 0;
+        minor = builtins.elemAt version 1;
+
+        dotnet = pkgs.dotnetCorePackages."sdk_${major}_${minor}-bin";
         dotnetRoot = "${dotnet.unwrapped}/share/dotnet";
       in
       {
-        default = pkgs.mkShell {
+        default = pkgs.mkShell.override {
+          stdenv = if pkgs.stdenv.hostPlatform.isDarwin then pkgs.swiftPackages.stdenv else pkgs.stdenv;
+        } {
           packages = [
             dotnet
             pkgs.nodejs_26
+          ];
+
+          buildInputs = [
+            pkgs.zlib
+          ] ++ pkgs.lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
+            pkgs.swiftPackages.swift
+            pkgs.darwin.ICU
           ];
 
           DOTNET_ROOT = dotnetRoot;
