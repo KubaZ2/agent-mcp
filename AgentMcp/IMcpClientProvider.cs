@@ -4,33 +4,26 @@ namespace AgentMcp;
 
 internal interface IMcpClientProvider
 {
-    public ValueTask<McpClient?> CreateAsync(McpServerConfiguration configuration, McpClientOptions options);
+    public ValueTask<McpClient?> CreateAsync(IMcpServerConfiguration configuration, McpClientOptions options);
 }
 
-internal class DefaultMcpClientProvider(ILogger<DefaultMcpClientProvider> logger) : IMcpClientProvider
+internal class DefaultMcpClientProvider : IMcpClientProvider
 {
-    public ValueTask<McpClient?> CreateAsync(McpServerConfiguration configuration, McpClientOptions options)
+    public ValueTask<McpClient?> CreateAsync(IMcpServerConfiguration configuration, McpClientOptions options)
     {
         IClientTransport? transport = configuration switch
         {
-            { Command: { } command } => new StdioClientTransport(new()
+            StdioMcpServerConfiguration stdioConfig => new StdioClientTransport(new()
             {
-                Command = command,
-                Arguments = configuration.Args?.ToArray(),
+                Command = stdioConfig.Command,
+                Arguments = stdioConfig.Args?.ToArray(),
             }),
-            { Endpoint: { } endpoint } => new HttpClientTransport(new()
+            HttpMcpServerConfiguration httpConfig => new HttpClientTransport(new()
             {
-                Endpoint = new(endpoint),
+                Endpoint = new(httpConfig.Endpoint),
             }),
-            _ => null,
+            _ => throw new InvalidOperationException($"Unknown {nameof(IMcpServerConfiguration)} type '{configuration.GetType().Name}'"),
         };
-
-        if (transport is null)
-        {
-            logger.LogWarning("MCP server configuration is invalid. Either 'Command' or 'Endpoint' must be specified.");
-
-            return default;
-        }
 
         return new(McpClient.CreateAsync(transport, options)!);
     }
