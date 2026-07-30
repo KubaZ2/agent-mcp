@@ -26,14 +26,26 @@ internal partial class RunAgentProvider(IOptionsMonitor<Options> options, ILogge
 
     private async ValueTask<object?> HandleFunctionInvocationAsync(FunctionInvocationContext context, AgentData agent, McpServer server, CancellationToken cancellationToken)
     {
+        logger.LogDebug("Agent {Agent} is invoking {FunctionCount} function(s) in parallel", agent.Name, context.FunctionCount);
+
         var function = context.Function;
 
         logger.LogInformation("Agent {Agent} is requesting to call {FunctionName} with arguments: {Arguments}", agent.Name, function.Name, context.Arguments);
 
-        var filterResult = await agent.ToolInvocationFilter.FilterAsync(function, context.Arguments, cancellationToken);
+        var semaphore = agent.ToolInvocationFilterSemaphore;
 
-        if (await HandleFilterResultAsync(context, agent, server, function, filterResult, cancellationToken) is { } response)
-            return response;
+        await semaphore.WaitAsync(cancellationToken);
+        try
+        {
+            var filterResult = await agent.ToolInvocationFilter.FilterAsync(function, context.Arguments, cancellationToken);
+
+            if (await HandleFilterResultAsync(context, agent, server, function, filterResult, cancellationToken) is { } response)
+                return response;
+        }
+        finally
+        {
+            semaphore.Release();
+        }
 
         if (function is McpClientToolWrapper wrapper)
         {
@@ -150,16 +162,15 @@ internal partial class RunAgentProvider(IOptionsMonitor<Options> options, ILogge
         messageBuilder.AppendLine($"Agent {agent.Name} is requesting to call {function.Name} with ");
 
         var arguments = context.Arguments;
-        var count = arguments.Count;
 
-        if (count is 0)
-            messageBuilder.AppendLine("no arguments.");
+        if (arguments.Count is 0)
+            messageBuilder.Append("no arguments.");
         else
         {
-            messageBuilder.AppendLine("the following arguments:");
+            messageBuilder.Append("the following arguments:");
 
             foreach (var (key, value) in arguments)
-                messageBuilder.Append(--count > 0 ? $"- {key}: {value}\n" : $"- {key}: {value}");
+                messageBuilder.Append($"\n- {key}: {value}");
         }
 
         var message = messageBuilder.ToString();
@@ -305,11 +316,11 @@ internal partial class RunAgentProvider(IOptionsMonitor<Options> options, ILogge
 
     private async ValueTask<ElicitResult> HandleElicitationAsync(ElicitRequestParams request, McpServer server, CancellationToken cancellationToken)
     {
-        logger.LogInformation("Handling elicitation request: {Request}", JsonSerializer.Serialize(request, McpJsonUtilities.DefaultOptions.GetTypeInfo<ElicitRequestParams>()));
+        logger.LogDebug("Handling elicitation request: {Request}", JsonSerializer.Serialize(request, McpJsonUtilities.DefaultOptions.GetTypeInfo<ElicitRequestParams>()));
 
         var result = await server.ElicitAsync(request, cancellationToken);
 
-        logger.LogInformation("Elicitation request handled successfully: {Result}", JsonSerializer.Serialize(result, McpJsonUtilities.DefaultOptions.GetTypeInfo<ElicitResult>()));
+        logger.LogDebug("Elicitation request handled successfully: {Result}", JsonSerializer.Serialize(result, McpJsonUtilities.DefaultOptions.GetTypeInfo<ElicitResult>()));
 
         return result;
     }
@@ -524,7 +535,10 @@ internal partial class RunAgentProvider(IOptionsMonitor<Options> options, ILogge
         if (chatClient is null)
             return null;
 
-        FunctionInvokingChatClient functionInvokingChatClient = new(chatClient);
+        FunctionInvokingChatClient functionInvokingChatClient = new(chatClient)
+        {
+            AllowConcurrentInvocation = true,
+        };
 
         StrongBox<ElicitationHandler> elicitationHandlerBox = new();
 

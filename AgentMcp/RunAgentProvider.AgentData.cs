@@ -23,6 +23,8 @@ internal partial class RunAgentProvider
 
         private State _state = new([], new(TaskCreationOptions.RunContinuationsAsynchronously));
 
+        public SemaphoreSlim ToolInvocationFilterSemaphore { get; } = new(1, 1);
+
         public bool TryEnter()
         {
             return Interlocked.CompareExchange(ref _lock, 1, 0) is 0;
