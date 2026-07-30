@@ -91,6 +91,12 @@ internal partial class StdioMcpServerConfiguration : IMcpServerConfiguration
     public string Command { get; set; } = null!;
 
     public IReadOnlyList<string>? Args { get; set; }
+
+    public IReadOnlyDictionary<string, string?>? Env { get; set; }
+
+    public bool InheritEnv { get; set; } = true;
+
+    public string? Cwd { get; set; }
 }
 
 internal partial class HttpMcpServerConfiguration : IMcpServerConfiguration

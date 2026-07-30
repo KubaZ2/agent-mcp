@@ -17,6 +17,9 @@ internal class DefaultMcpClientProvider : IMcpClientProvider
             {
                 Command = stdioConfig.Command,
                 Arguments = stdioConfig.Args?.ToArray(),
+                EnvironmentVariables = stdioConfig.Env?.ToDictionary(),
+                InheritEnvironmentVariables = stdioConfig.InheritEnv,
+                WorkingDirectory = stdioConfig.Cwd,
             }),
             HttpMcpServerConfiguration httpConfig => new HttpClientTransport(new()
             {
