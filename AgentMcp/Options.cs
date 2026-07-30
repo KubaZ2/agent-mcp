@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using AgentMcp;
 using Microsoft.Extensions.Options;
+using ModelContextProtocol.Client;
 
 internal partial class Options
 {
@@ -61,7 +62,7 @@ internal class AgentConfiguration
 
     public IReadOnlyList<string>? Mcp { get; set; }
 
-    public ToolApprovalPolicy DefaultToolPolicy { get; set; } = ToolApprovalPolicy.Ask;
+    public ToolApprovalPolicy? DefaultToolPolicy { get; set; }
 
     public IReadOnlyList<string>? AutoApproveTools { get; set; }
 
@@ -94,9 +95,11 @@ internal partial class StdioMcpServerConfiguration : IMcpServerConfiguration
 
     public IReadOnlyDictionary<string, string?>? Env { get; set; }
 
-    public bool InheritEnv { get; set; } = true;
+    public bool? InheritEnv { get; set; }
 
     public string? Cwd { get; set; }
+
+    public double? ShutdownTimeoutSeconds { get; set; }
 }
 
 internal partial class HttpMcpServerConfiguration : IMcpServerConfiguration
@@ -108,4 +111,25 @@ internal partial class HttpMcpServerConfiguration : IMcpServerConfiguration
 
     [Required]
     public string Endpoint { get; set; } = null!;
+
+    public IReadOnlyDictionary<string, string>? Headers { get; set; }
+
+    public string? SessionId { get; set; }
+
+    public double? ConnectionTimeoutSeconds { get; set; }
+
+    public double? DefaultReconnectionIntervalSeconds { get; set; }
+
+    public int? MaxReconnectionAttempts { get; set; }
+
+    public bool? OwnsSession { get; set; }
+
+    public HttpMcpTransportMode? Mode { get; set; }
+}
+
+internal enum HttpMcpTransportMode
+{
+    Auto = HttpTransportMode.AutoDetect,
+    StreamableHttp = HttpTransportMode.StreamableHttp,
+    Sse = HttpTransportMode.Sse,
 }

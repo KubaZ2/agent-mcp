@@ -13,7 +13,7 @@ internal class DefaultToolInvocationFilterProvider : IToolInvocationFilterProvid
 
     public ValueTask<IToolInvocationFilter> CreateAsync(AgentConfiguration agent)
     {
-        return new(new DefaultToolInvocationFilter((ToolFilterResult)agent.DefaultToolPolicy,
+        return new(new DefaultToolInvocationFilter((ToolFilterResult)agent.DefaultToolPolicy.GetValueOrDefault(ToolApprovalPolicy.Ask),
                                                    agent.AutoApproveTools ?? [],
                                                    agent.AutoDenyTools ?? []));
     }
