@@ -80,12 +80,15 @@ services.AddSingleton<RunAgentProvider>();
 services.AddHostedService(services => services.GetRequiredService<RunAgentProvider>());
 services.AddSingleton(services => services.GetRequiredService<RunAgentProvider>().GetTool());
 
-services.AddSingleton<IValidateOptions<Options>, Options.Validator>();
-
 services
     .AddOptions<Options>()
-    .Configure((Options options, IConfiguration configuration, IServiceProvider services) => options.ConfigureProviders(configuration, services))
+    .Validate<Options.Validator>()
     .BindConfiguration(string.Empty);
+
+services.AddSingleton<IValidateOptions<StdioMcpServerConfiguration>, StdioMcpServerConfiguration.Validator>();
+services.AddSingleton<IValidateOptions<HttpMcpServerConfiguration>, HttpMcpServerConfiguration.Validator>();
+
+services.AddSingleton<IConfigureOptions<Options>, ConfigureOptions>();
 
 IHost host = mode switch
 {

@@ -4,34 +4,67 @@ namespace AgentMcp;
 
 internal interface IMcpClientProvider
 {
-    public ValueTask<McpClient?> CreateAsync(McpServerConfiguration configuration, McpClientOptions options);
+    public ValueTask<McpClient?> CreateAsync(IMcpServerConfiguration configuration, McpClientOptions options);
 }
 
-internal class DefaultMcpClientProvider(ILogger<DefaultMcpClientProvider> logger) : IMcpClientProvider
+internal class DefaultMcpClientProvider : IMcpClientProvider
 {
-    public ValueTask<McpClient?> CreateAsync(McpServerConfiguration configuration, McpClientOptions options)
+    public ValueTask<McpClient?> CreateAsync(IMcpServerConfiguration configuration, McpClientOptions options)
     {
         IClientTransport? transport = configuration switch
         {
-            { Command: { } command } => new StdioClientTransport(new()
-            {
-                Command = command,
-                Arguments = configuration.Args?.ToArray(),
-            }),
-            { Endpoint: { } endpoint } => new HttpClientTransport(new()
-            {
-                Endpoint = new(endpoint),
-            }),
-            _ => null,
+            StdioMcpServerConfiguration stdioConfig => CreateStdioTransport(stdioConfig),
+            HttpMcpServerConfiguration httpConfig => CreateHttpTransport(httpConfig),
+            _ => throw new InvalidOperationException($"Unknown {nameof(IMcpServerConfiguration)} type '{configuration.GetType().Name}'"),
         };
 
-        if (transport is null)
-        {
-            logger.LogWarning("MCP server configuration is invalid. Either 'Command' or 'Endpoint' must be specified.");
-
-            return default;
-        }
-
         return new(McpClient.CreateAsync(transport, options)!);
+    }
+
+    private static StdioClientTransport CreateStdioTransport(StdioMcpServerConfiguration stdioConfig)
+    {
+        StdioClientTransportOptions options = new()
+        {
+            Command = stdioConfig.Command,
+            Arguments = stdioConfig.Args?.ToArray(),
+            EnvironmentVariables = stdioConfig.Env?.ToDictionary(),
+            WorkingDirectory = stdioConfig.Cwd,
+        };
+
+        if (stdioConfig.InheritEnv is { } inheritEnv)
+            options.InheritEnvironmentVariables = inheritEnv;
+
+        if (stdioConfig.ShutdownTimeoutSeconds is { } shutdownTimeout)
+            options.ShutdownTimeout = TimeSpan.FromSeconds(shutdownTimeout);
+
+        return new(options);
+    }
+
+    private static HttpClientTransport CreateHttpTransport(HttpMcpServerConfiguration httpConfig)
+    {
+        // TODO: Add OAuth support
+        HttpClientTransportOptions options = new()
+        {
+            Endpoint = new(httpConfig.Endpoint),
+            AdditionalHeaders = httpConfig.Headers?.ToDictionary(),
+            KnownSessionId = httpConfig.SessionId,
+        };
+
+        if (httpConfig.ConnectionTimeoutSeconds is { } connectionTimeout)
+            options.ConnectionTimeout = TimeSpan.FromSeconds(connectionTimeout);
+
+        if (httpConfig.DefaultReconnectionIntervalSeconds is { } defaultReconnectionInterval)
+            options.DefaultReconnectionInterval = TimeSpan.FromSeconds(defaultReconnectionInterval);
+
+        if (httpConfig.MaxReconnectionAttempts is { } maxReconnectionAttempts)
+            options.MaxReconnectionAttempts = maxReconnectionAttempts;
+
+        if (httpConfig.OwnsSession is { } ownsSession)
+            options.OwnsSession = ownsSession;
+
+        if (httpConfig.Mode is { } mode)
+            options.TransportMode = (HttpTransportMode)mode;
+
+        return new(options);
     }
 }
