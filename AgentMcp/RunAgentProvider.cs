@@ -15,7 +15,7 @@ using ElicitationHandler = System.Func<ModelContextProtocol.Protocol.ElicitReque
 
 namespace AgentMcp;
 
-internal partial class RunAgentProvider(IOptionsMonitor<Options> options, ILogger<RunAgentProvider> logger, IChatClientProvider chatClientProvider, IMcpClientProvider mcpClientProvider) : IMcpServerToolProvider, IHostedService
+internal partial class RunAgentProvider(IOptionsMonitor<Options> options, ILogger<RunAgentProvider> logger, IChatClientProvider chatClientProvider, IMcpClientProvider mcpClientProvider, IToolInvocationFilterProvider toolFilterProvider) : IMcpServerToolProvider, IHostedService
 {
     private FrozenDictionary<string, AgentData>? _agentData;
 
@@ -30,55 +30,10 @@ internal partial class RunAgentProvider(IOptionsMonitor<Options> options, ILogge
 
         logger.LogInformation("Agent {Agent} is requesting to call {FunctionName} with arguments: {Arguments}", agent.Name, function.Name, context.Arguments);
 
-        if (!server.IsMrtrSupported && server.ClientCapabilities is not { Elicitation: { Form: { } } })
-        {
-            logger.LogWarning("Client does not support elicitation.");
+        var filterResult = await agent.ToolInvocationFilter.FilterAsync(function, context.Arguments, cancellationToken);
 
-            return "Error: The client does not support elicitation.";
-        }
-
-        var message = $"Agent {agent.Name} is requesting to call {function.Name}. Please select the action to take.";
-
-        var result = await server.ElicitAsync(new()
-        {
-            Message = message,
-            RequestedSchema = new()
-            {
-                Properties = new Dictionary<string, ElicitRequestParams.PrimitiveSchemaDefinition>
-                {
-                    ["action"] = new ElicitRequestParams.TitledSingleSelectEnumSchema
-                    {
-                        Title = "Tool Call Request",
-                        Description = message,
-                        OneOf = [
-                            new ElicitRequestParams.EnumSchemaOption
-                            {
-                                Title = "Approve",
-                                Const = "approve",
-                            },
-                            new ElicitRequestParams.EnumSchemaOption
-                            {
-                                Title = "Deny",
-                                Const = "deny",
-                            },
-                        ],
-                    },
-                },
-            },
-        }, cancellationToken);
-
-        if (result.Action is not "accept"
-            || result.Content is not { } content
-            || !content.TryGetValue("action", out var actionValue)
-            || actionValue.ValueKind is not JsonValueKind.String
-            || !actionValue.ValueEquals("approve"u8))
-        {
-            logger.LogWarning("User denied the tool call.");
-
-            return "Error: The user denied the tool call.";
-        }
-
-        logger.LogInformation("User approved the tool call. Invoking function {FunctionName} with arguments: {Arguments}", function.Name, context.Arguments);
+        if (await HandleFilterResultAsync(context, agent, server, function, filterResult, cancellationToken) is { } response)
+            return response;
 
         if (function is McpClientToolWrapper wrapper)
         {
@@ -105,6 +60,165 @@ internal partial class RunAgentProvider(IOptionsMonitor<Options> options, ILogge
         logger.LogInformation("Calling function {FunctionName} directly.", function.Name);
 
         return await function.InvokeAsync(context.Arguments, cancellationToken);
+    }
+
+    private async ValueTask<string?> HandleFilterResultAsync(FunctionInvocationContext context, AgentData agent, McpServer server, AIFunction function, ToolFilterResult filterResult, CancellationToken cancellationToken)
+    {
+        switch (filterResult)
+        {
+            case ToolFilterResult.Deny:
+                {
+                    logger.LogInformation("Function {FunctionName} invocation denied by filter.", function.Name);
+
+                    return "Error: Function invocation denied by filter.";
+                }
+            case ToolFilterResult.Allow:
+                {
+                    logger.LogInformation("Function {FunctionName} invocation allowed by filter.", function.Name);
+
+                    break;
+                }
+            case ToolFilterResult.Ask:
+                {
+                    logger.LogInformation("Function {FunctionName} invocation requires user approval.", function.Name);
+
+                    var askResult = await AskAsync(context, agent, server, function, cancellationToken);
+
+                    if (await HandleAskResultAsync(agent, function, askResult, cancellationToken) is { } response)
+                        return response;
+
+                    break;
+                }
+        }
+
+        return null;
+    }
+
+    private async ValueTask<string?> HandleAskResultAsync(AgentData agent, AIFunction function, AskResult askResult, CancellationToken cancellationToken)
+    {
+        switch (askResult)
+        {
+            case var _ when askResult.HasFlag(AskResult.Deny):
+                logger.LogInformation("Function {FunctionName} invocation denied by user.", function.Name);
+
+                if (askResult.HasFlag(AskResultAlwaysFlag))
+                {
+                    await agent.ToolInvocationFilter.AddAutoDenyToolAsync(function.Name, cancellationToken);
+
+                    logger.LogInformation("Added function {FunctionName} to auto-deny list.", function.Name);
+                }
+
+                break;
+            case var _ when askResult.HasFlag(AskResult.Approve):
+                logger.LogInformation("Function {FunctionName} invocation approved by user.", function.Name);
+
+                if (askResult.HasFlag(AskResultAlwaysFlag))
+                {
+                    await agent.ToolInvocationFilter.AddAutoApproveToolAsync(function.Name, cancellationToken);
+
+                    logger.LogInformation("Added function {FunctionName} to auto-approve list.", function.Name);
+                }
+
+                return null;
+            case var _ when askResult.HasFlag(AskResult.NotSupported):
+                logger.LogInformation("Elicitation not supported by the client. Function {FunctionName} invocation denied.", function.Name);
+
+                break;
+        }
+
+        return "Error: Function invocation denied by user.";
+    }
+
+    private const AskResult AskResultAlwaysFlag = (AskResult)(1 << 3);
+
+    private enum AskResult : byte
+    {
+        Approve = 1 << 0,
+        Deny = 1 << 1,
+        NotSupported = 1 << 2,
+        AlwaysApprove = Approve | AskResultAlwaysFlag,
+        AlwaysDeny = Deny | AskResultAlwaysFlag,
+    }
+
+    private async Task<AskResult> AskAsync(FunctionInvocationContext context, AgentData agent, McpServer server, AIFunction function, CancellationToken cancellationToken)
+    {
+        if (!server.IsMrtrSupported && server.ClientCapabilities is not { Elicitation: { Form: { } } })
+            return AskResult.NotSupported;
+
+        StringBuilder messageBuilder = new();
+
+        messageBuilder.AppendLine($"Agent {agent.Name} is requesting to call {function.Name} with ");
+
+        var arguments = context.Arguments;
+        var count = arguments.Count;
+
+        if (count is 0)
+            messageBuilder.AppendLine("no arguments.");
+        else
+        {
+            messageBuilder.AppendLine("the following arguments:");
+
+            foreach (var (key, value) in arguments)
+                messageBuilder.Append(--count > 0 ? $"- {key}: {value}\n" : $"- {key}: {value}");
+        }
+
+        var message = messageBuilder.ToString();
+
+        var result = await server.ElicitAsync(new()
+        {
+            Message = message,
+            RequestedSchema = new()
+            {
+                Properties = new Dictionary<string, ElicitRequestParams.PrimitiveSchemaDefinition>
+                {
+                    ["action"] = new ElicitRequestParams.TitledSingleSelectEnumSchema
+                    {
+                        Title = "Tool Call Request",
+                        OneOf = [
+                            new ElicitRequestParams.EnumSchemaOption
+                            {
+                                Title = "Approve Once",
+                                Const = "approve",
+                            },
+                            new ElicitRequestParams.EnumSchemaOption
+                            {
+                                Title = "Approve Always",
+                                Const = "approve-always",
+                            },
+                            new ElicitRequestParams.EnumSchemaOption
+                            {
+                                Title = "Deny Once",
+                                Const = "deny",
+                            },
+                            new ElicitRequestParams.EnumSchemaOption
+                            {
+                                Title = "Deny Always",
+                                Const = "deny-always",
+                            },
+                        ],
+                    },
+                },
+            },
+        }, cancellationToken);
+
+        if (result.Action is not "accept"
+            || result.Content is not { } content
+            || !content.TryGetValue("action", out var actionValue)
+            || actionValue.ValueKind is not JsonValueKind.String)
+        {
+            logger.LogWarning("Elicitation result is invalid or missing action. Denying function invocation.");
+
+            return AskResult.Deny;
+        }
+
+        return actionValue switch
+        {
+            _ when actionValue.ValueEquals("approve-always"u8) => AskResult.AlwaysApprove,
+            _ when actionValue.ValueEquals("approve"u8) => AskResult.Approve,
+            _ when actionValue.ValueEquals("deny"u8) => AskResult.Deny,
+            _ when actionValue.ValueEquals("deny-always"u8) => AskResult.AlwaysDeny,
+            _ => AskResult.Deny,
+        };
     }
 
     private record PollTaskResult(string CallId, GetTaskResult TaskResult);
@@ -202,7 +316,7 @@ internal partial class RunAgentProvider(IOptionsMonitor<Options> options, ILogge
 
     private async Task<string> RunAgentAsyncCore(AgentData agent, string instruction, McpServer server)
     {
-        var (name, chatClient, tools, systemPrompt, elicitationHandler) = agent;
+        var (name, chatClient, tools, systemPrompt, elicitationHandler, _) = agent;
 
         ChatMessage userMessage = new(ChatRole.User, instruction);
 
@@ -420,7 +534,9 @@ internal partial class RunAgentProvider(IOptionsMonitor<Options> options, ILogge
             ? [.. (await Task.WhenAll(mcpKeys.Select(k => GetMcpToolsAsync(k, elicitationHandler, name)))).SelectMany(j => j)]
             : [];
 
-        AgentData agentData = new(name, functionInvokingChatClient, tools, agent.SystemPrompt, elicitationHandlerBox);
+        var filter = await toolFilterProvider.CreateAsync(agent);
+
+        AgentData agentData = new(name, functionInvokingChatClient, tools, agent.SystemPrompt, elicitationHandlerBox, filter);
 
         return new(name, agentData);
     }

@@ -1,7 +1,6 @@
 using System.Collections.Immutable;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.AI;
-using ModelContextProtocol.Extensions.Tasks;
 
 using ElicitationHandler = System.Func<ModelContextProtocol.Protocol.ElicitRequestParams?, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<ModelContextProtocol.Protocol.ElicitResult>>;
 
@@ -9,7 +8,7 @@ namespace AgentMcp;
 
 internal partial class RunAgentProvider
 {
-    private record AgentData(string Name, FunctionInvokingChatClient ChatClient, IReadOnlyList<AITool> Tools, string? SystemPrompt, StrongBox<ElicitationHandler> ElicitationHandler)
+    private record AgentData(string Name, FunctionInvokingChatClient ChatClient, IReadOnlyList<AITool> Tools, string? SystemPrompt, StrongBox<ElicitationHandler> ElicitationHandler, IToolInvocationFilter ToolInvocationFilter)
     {
         private class State(ImmutableHashSet<Task<PollTaskResult>> tasks, TaskCompletionSource<PollTaskResult?> completionSource)
         {
@@ -92,4 +91,3 @@ internal partial class RunAgentProvider
         }
     }
 }
-

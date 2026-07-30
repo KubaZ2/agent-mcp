@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics.CodeAnalysis;
+using AgentMcp;
 using Microsoft.Extensions.Options;
 
 internal partial class Options
@@ -118,6 +119,19 @@ internal class AgentConfiguration
     public string Model { get; set; } = null!;
 
     public IReadOnlyList<string>? Mcp { get; set; }
+
+    public ToolApprovalPolicy DefaultToolPolicy { get; set; } = ToolApprovalPolicy.Ask;
+
+    public IReadOnlyList<string>? AutoApproveTools { get; set; }
+
+    public IReadOnlyList<string>? AutoDenyTools { get; set; }
+}
+
+internal enum ToolApprovalPolicy : byte
+{
+    Ask = ToolFilterResult.Ask,
+    Allow = ToolFilterResult.Allow,
+    Deny = ToolFilterResult.Deny,
 }
 
 internal class McpServerConfiguration

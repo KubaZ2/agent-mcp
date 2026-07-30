@@ -73,6 +73,8 @@ _ = mode switch
 
 services.AddSingleton<IChatClientProvider, DefaultChatClientProvider>();
 services.AddSingleton<IMcpClientProvider, DefaultMcpClientProvider>();
+services.AddSingleton<IToolInvocationFilter, DefaultToolInvocationFilter>();
+services.AddSingleton<IToolInvocationFilterProvider, DefaultToolInvocationFilterProvider>();
 
 services.AddSingleton<RunAgentProvider>();
 services.AddHostedService(services => services.GetRequiredService<RunAgentProvider>());
