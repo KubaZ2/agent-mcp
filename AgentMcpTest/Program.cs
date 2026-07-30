@@ -24,17 +24,17 @@ var loggerFactory = LoggerFactory.Create(builder =>
 //     WorkingDirectory = "/home/kuba/repos/McpBugRepro/bin/Debug/net10.0"
 // }, loggerFactory);
 
-// var clientTransport = new StdioClientTransport(new StdioClientTransportOptions
-// {
-//     Command = "dotnet",
-//     Arguments = ["AgentMcp.dll"],
-//     WorkingDirectory = "../../../../AgentMcp/bin/Debug/net10.0"
-// }, loggerFactory);
-
-var clientTransport = new HttpClientTransport(new()
+var clientTransport = new StdioClientTransport(new StdioClientTransportOptions
 {
-    Endpoint = new("http://localhost:5000"),
+    Command = "dotnet",
+    Arguments = ["AgentMcp.dll", "--config", "/home/kuba/repos/agent-mcp/AgentMcp/config.ini"],
+    WorkingDirectory = "../../../../AgentMcp/bin/Debug/net11.0"
 }, loggerFactory);
+
+// var clientTransport = new HttpClientTransport(new()
+// {
+//     Endpoint = new("http://localhost:5000"),
+// }, loggerFactory);
 
 McpClientOptions clientOptions = new()
 {
@@ -48,6 +48,8 @@ McpClientOptions clientOptions = new()
 };
 
 var client = await McpClient.CreateAsync(clientTransport, clientOptions, loggerFactory);
+
+Console.WriteLine(client.NegotiatedProtocolVersion);
 
 // client.ServerCapabilities.
 
