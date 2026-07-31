@@ -47,6 +47,7 @@ internal class DefaultChatClientProvider(ILogger<DefaultChatClientProvider> logg
         return new(client.AsBuilder().ConfigureOptions(o =>
         {
             o.ModelId ??= agent.Model;
+            o.MaxOutputTokens ??= agent.MaxOutputTokens;
         }).Build());
     }
 

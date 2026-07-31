@@ -60,6 +60,8 @@ internal class AgentConfiguration
     [Required]
     public string Model { get; set; } = null!;
 
+    public int? MaxOutputTokens { get; set; }
+
     public IReadOnlyList<string>? Mcp { get; set; }
 
     public ToolApprovalPolicy? DefaultToolPolicy { get; set; }
