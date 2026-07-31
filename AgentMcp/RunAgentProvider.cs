@@ -1,5 +1,6 @@
 using System.Collections.Frozen;
 using System.ComponentModel;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
@@ -327,7 +328,7 @@ internal partial class RunAgentProvider(IOptionsMonitor<Options> options, ILogge
 
     private async Task<string> RunAgentAsyncCore(AgentData agent, string instruction, McpServer server)
     {
-        var (name, chatClient, tools, systemPrompt, elicitationHandler, _) = agent;
+        var (name, chatClient, tools, systemPrompt, toolCallTaskFinishPrompt, elicitationHandler, _) = agent;
 
         ChatMessage userMessage = new(ChatRole.User, instruction);
 
@@ -356,23 +357,27 @@ internal partial class RunAgentProvider(IOptionsMonitor<Options> options, ILogge
 
         while (true)
         {
-            var result = await agent.WaitForToolTaskCompletionAsync();
+            var taskResult = await agent.WaitForToolTaskCompletionAsync();
 
-            if (result is null)
+            if (taskResult is null)
                 break;
 
-            if (result.TaskResult is not CompletedTaskResult completedTask)
+            if (taskResult.TaskResult is not CompletedTaskResult completedTask)
             {
-                logger.LogWarning("Agent {Agent} received non-completed task result: {Result}", name, JsonSerializer.Serialize(result, McpTasksJsonContext.Default.GetTaskResult));
+                logger.LogWarning("Agent {Agent} received non-completed task result: {Result}", name, JsonSerializer.Serialize(taskResult, McpTasksJsonContext.Default.GetTaskResult));
 
                 continue;
             }
 
             logger.LogInformation("Agent {Agent} received completed task result: {Result}", name, JsonSerializer.Serialize(completedTask, McpTasksJsonContext.Default.CompletedTaskResult));
 
-            var toolResultMessage = JsonSerializer.Deserialize(completedTask.Result, McpJsonUtilities.DefaultOptions.GetTypeInfo<CallToolResult>())!;
+            var toolResult = JsonSerializer.Deserialize(completedTask.Result, McpJsonUtilities.DefaultOptions.GetTypeInfo<CallToolResult>())!;
 
-            messages.Add(toolResultMessage.ToChatMessage(result.CallId));
+            messages.Add(new(ChatRole.Tool,
+            [
+                new TextContent(string.Format(null, toolCallTaskFinishPrompt, taskResult.CallId)),
+                .. toolResult.Content.ToAIContents()
+            ]));
 
             response = await chatClient.GetResponseAsync(messages, new ChatOptions
             {
@@ -550,7 +555,16 @@ internal partial class RunAgentProvider(IOptionsMonitor<Options> options, ILogge
 
         var filter = await toolFilterProvider.CreateAsync(agent);
 
-        AgentData agentData = new(name, functionInvokingChatClient, tools, agent.SystemPrompt, elicitationHandlerBox, filter);
+        var toolCallTaskFinishPrompt = CompositeFormat.Parse(agent.ToolCallTaskFinishPrompt
+                                                             ?? "Background task for tool call {0} has finished. Result:\n");
+
+        AgentData agentData = new(name,
+                                  functionInvokingChatClient,
+                                  tools,
+                                  agent.SystemPrompt,
+                                  toolCallTaskFinishPrompt,
+                                  elicitationHandlerBox,
+                                  filter);
 
         return new(name, agentData);
     }

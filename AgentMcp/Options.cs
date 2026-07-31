@@ -54,11 +54,15 @@ internal class AgentConfiguration
 
     public string? SystemPrompt { get; set; }
 
+    public string? ToolCallTaskFinishPrompt { get; set; }
+
     [Required]
     public string Provider { get; set; } = null!;
 
     [Required]
     public string Model { get; set; } = null!;
+
+    public int? MaxOutputTokens { get; set; }
 
     public IReadOnlyList<string>? Mcp { get; set; }
 
