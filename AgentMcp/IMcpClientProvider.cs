@@ -4,12 +4,12 @@ namespace AgentMcp;
 
 internal interface IMcpClientProvider
 {
-    public ValueTask<McpClient?> CreateAsync(IMcpServerConfiguration configuration, McpClientOptions options);
+    public ValueTask<McpClient?> CreateAsync(string key, IMcpServerConfiguration configuration, McpClientOptions options);
 }
 
 internal class DefaultMcpClientProvider : IMcpClientProvider
 {
-    public ValueTask<McpClient?> CreateAsync(IMcpServerConfiguration configuration, McpClientOptions options)
+    public async ValueTask<McpClient?> CreateAsync(string key, IMcpServerConfiguration configuration, McpClientOptions options)
     {
         IClientTransport? transport = configuration switch
         {
@@ -18,7 +18,14 @@ internal class DefaultMcpClientProvider : IMcpClientProvider
             _ => throw new InvalidOperationException($"Unknown {nameof(IMcpServerConfiguration)} type '{configuration.GetType().Name}'"),
         };
 
-        return new(McpClient.CreateAsync(transport, options)!);
+        try
+        {
+            return await McpClient.CreateAsync(transport, options);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException($"Failed to connect to '{key}' MCP server.", ex);
+        }
     }
 
     private static StdioClientTransport CreateStdioTransport(StdioMcpServerConfiguration stdioConfig)

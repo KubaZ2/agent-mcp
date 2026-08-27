@@ -502,7 +502,7 @@ internal partial class RunAgentProvider(IOptionsMonitor<Options> options, ILogge
             return [];
         }
 
-        var mcpClient = await mcpClientProvider.CreateAsync(mcpConfig, new()
+        var mcpClient = await mcpClientProvider.CreateAsync(mcpServerKey, mcpConfig, new()
         {
             Capabilities = new()
             {

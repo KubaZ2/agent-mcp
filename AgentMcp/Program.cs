@@ -53,10 +53,12 @@ if (configuration.GetValue<string>("Config") is { } configPath)
         var extenion => throw new InvalidOperationException($"Unknown config file extension '{extenion}'"),
     };
 
-builder.Logging.AddConsole(consoleLogOptions =>
-{
-    consoleLogOptions.LogToStandardErrorThreshold = LogLevel.Trace;
-});
+builder.Logging
+    .AddConfiguration(configuration.GetSection("Logging"))
+    .AddConsole(consoleLogOptions =>
+    {
+        consoleLogOptions.LogToStandardErrorThreshold = LogLevel.Trace;
+    });
 
 var services = builder.Services;
 
