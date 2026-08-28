@@ -10,6 +10,7 @@
     <StaticWebAssetsEnabled>false</StaticWebAssetsEnabled>
     <EnableConfigurationBindingGenerator>true</EnableConfigurationBindingGenerator>
     <NoWarn>$(NoWarn);SYSLIB1100;SYSLIB1101</NoWarn>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
 
   <ItemGroup>
