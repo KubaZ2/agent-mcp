@@ -55,7 +55,8 @@ internal partial class RunAgentProvider(IOptionsMonitor<Options> options, ILogge
 
             if (!callResult.IsTask)
             {
-                logger.LogInformation("Function {FunctionName} completed immediately with result: {Result}", function.Name, JsonSerializer.Serialize(callResult.Result, McpJsonUtilities.DefaultOptions.GetTypeInfo<CallToolResult?>()));
+                if (logger.IsEnabled(LogLevel.Information))
+                    logger.LogInformation("Function {FunctionName} completed immediately with result: {Result}", function.Name, JsonSerializer.Serialize(callResult.Result, McpJsonUtilities.DefaultOptions.GetTypeInfo<CallToolResult?>()));
 
                 return MarshalMcpResult(callResult.Result);
             }
@@ -332,11 +333,13 @@ internal partial class RunAgentProvider(IOptionsMonitor<Options> options, ILogge
 
     private async ValueTask<ElicitResult> HandleElicitationAsync(ElicitRequestParams request, McpServer server, CancellationToken cancellationToken)
     {
-        logger.LogDebug("Handling elicitation request: {Request}", JsonSerializer.Serialize(request, McpJsonUtilities.DefaultOptions.GetTypeInfo<ElicitRequestParams>()));
+        if (logger.IsEnabled(LogLevel.Debug))
+            logger.LogDebug("Handling elicitation request: {Request}", JsonSerializer.Serialize(request, McpJsonUtilities.DefaultOptions.GetTypeInfo<ElicitRequestParams>()));
 
         var result = await server.ElicitAsync(request, cancellationToken);
 
-        logger.LogDebug("Elicitation request handled successfully: {Result}", JsonSerializer.Serialize(result, McpJsonUtilities.DefaultOptions.GetTypeInfo<ElicitResult>()));
+        if (logger.IsEnabled(LogLevel.Debug))
+            logger.LogDebug("Elicitation request handled successfully: {Result}", JsonSerializer.Serialize(result, McpJsonUtilities.DefaultOptions.GetTypeInfo<ElicitResult>()));
 
         return result;
     }
@@ -370,6 +373,11 @@ internal partial class RunAgentProvider(IOptionsMonitor<Options> options, ILogge
             Tools = [.. tools],
         });
 
+        if (logger.IsEnabled(LogLevel.Debug))
+            logger.LogDebug("Agent {Agent} response: {Response}", name, JsonSerializer.Serialize(response, AIJsonUtilities.DefaultOptions.GetTypeInfo<ChatResponse>()));
+
+        messages.AddMessages(response);
+
         while (true)
         {
             var taskResult = await agent.WaitForToolTaskCompletionAsync();
@@ -379,12 +387,14 @@ internal partial class RunAgentProvider(IOptionsMonitor<Options> options, ILogge
 
             if (taskResult.TaskResult is not CompletedTaskResult completedTask)
             {
-                logger.LogWarning("Agent {Agent} received non-completed task result: {Result}", name, JsonSerializer.Serialize(taskResult, McpTasksJsonContext.Default.GetTaskResult));
+                if (logger.IsEnabled(LogLevel.Warning))
+                    logger.LogWarning("Agent {Agent} received non-completed task result: {Result}", name, JsonSerializer.Serialize(taskResult, McpTasksJsonContext.Default.GetTaskResult));
 
                 continue;
             }
 
-            logger.LogInformation("Agent {Agent} received completed task result: {Result}", name, JsonSerializer.Serialize(completedTask, McpTasksJsonContext.Default.CompletedTaskResult));
+            if (logger.IsEnabled(LogLevel.Information))
+                logger.LogInformation("Agent {Agent} received completed task result: {Result}", name, JsonSerializer.Serialize(completedTask, McpTasksJsonContext.Default.CompletedTaskResult));
 
             var toolResult = JsonSerializer.Deserialize(completedTask.Result, McpJsonUtilities.DefaultOptions.GetTypeInfo<CallToolResult>())!;
 
@@ -398,6 +408,9 @@ internal partial class RunAgentProvider(IOptionsMonitor<Options> options, ILogge
             {
                 Tools = [.. tools],
             });
+
+            if (logger.IsEnabled(LogLevel.Debug))
+                logger.LogDebug("Agent {Agent} response: {Response}", name, JsonSerializer.Serialize(response, AIJsonUtilities.DefaultOptions.GetTypeInfo<ChatResponse>()));
 
             messages.AddMessages(response);
         }
