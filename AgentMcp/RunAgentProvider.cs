@@ -1,10 +1,11 @@
 using System.Collections.Frozen;
 using System.ComponentModel;
-using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol;
@@ -25,10 +26,8 @@ internal partial class RunAgentProvider(IOptionsMonitor<Options> options, ILogge
         return JsonSerializer.SerializeToElement(result, McpJsonUtilities.DefaultOptions.GetTypeInfo<T>());
     }
 
-    private async ValueTask<object?> HandleFunctionInvocationAsync(FunctionInvocationContext context, AgentData agent, McpServer server, CancellationToken cancellationToken)
+    private async ValueTask<object?> HandleFunctionInvocationAsyncCore(FunctionInvocationContext context, AgentData agent, McpServer server, CancellationToken cancellationToken)
     {
-        logger.LogDebug("Agent {Agent} is invoking {FunctionCount} function(s) in parallel", agent.Name, context.FunctionCount);
-
         var function = context.Function;
 
         logger.LogInformation("Agent {Agent} is requesting to call {FunctionName} with arguments: {Arguments}", agent.Name, function.Name, context.Arguments);
@@ -73,6 +72,22 @@ internal partial class RunAgentProvider(IOptionsMonitor<Options> options, ILogge
         logger.LogInformation("Calling function {FunctionName} directly.", function.Name);
 
         return await function.InvokeAsync(context.Arguments, cancellationToken);
+    }
+
+    private async ValueTask<object?> HandleFunctionInvocationAsync(FunctionInvocationContext context, AgentData agent, McpServer server, CancellationToken cancellationToken)
+    {
+        logger.LogDebug("Agent {Agent} is invoking {FunctionCount} function(s) in parallel", agent.Name, context.FunctionCount);
+
+        try
+        {
+            return await HandleFunctionInvocationAsyncCore(context, agent, server, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Function {FunctionName} invocation failed with exception: {Exception}", context.Function.Name, ex.Message);
+
+            return $"Error: Function invocation failed with exception: {ex.Message}";
+        }
     }
 
     private async ValueTask<string?> HandleFilterResultAsync(FunctionInvocationContext context, AgentData agent, McpServer server, AIFunction function, ToolFilterResult filterResult, CancellationToken cancellationToken)
@@ -524,7 +539,19 @@ internal partial class RunAgentProvider(IOptionsMonitor<Options> options, ILogge
             return [];
         }
 
-        var tools = await mcpClient.ListToolsAsync();
+        // https://github.com/modelcontextprotocol/csharp-sdk/issues/1846
+        JsonSerializerOptions serializerOptions = new(McpJsonUtilities.DefaultOptions)
+        {
+            TypeInfoResolver = JsonTypeInfoResolver.Combine(
+                McpJsonUtilities.DefaultOptions.TypeInfoResolver,
+                McpClientToolSerializerContext.Default
+            ),
+        };
+
+        var tools = await mcpClient.ListToolsAsync(new RequestOptions
+        {
+            JsonSerializerOptions = serializerOptions,
+        });
 
         logger.LogInformation("Loaded {Count} functions from MCP server '{ServerName}' for agent '{AgentName}'", tools.Count, mcpServerKey, agentName);
 
@@ -586,4 +613,7 @@ internal partial class RunAgentProvider(IOptionsMonitor<Options> options, ILogge
     {
         return Task.CompletedTask;
     }
+
+    [JsonSerializable(typeof(List<object>))]
+    private sealed partial class McpClientToolSerializerContext : JsonSerializerContext;
 }

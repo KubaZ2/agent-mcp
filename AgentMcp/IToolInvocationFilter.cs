@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using System.Text.RegularExpressions;
 using Meziantou.Framework.Globbing;
@@ -41,7 +40,7 @@ internal class DefaultToolInvocationFilter(ToolFilterResult defaultResult, IRead
             return regex.IsMatch;
         }
 
-        var glob = Glob.Parse(pattern, GlobOptions.None);
+        var glob = Glob.Parse(pattern, GlobDialect.Standard, GlobOptions.None);
         return glob.IsMatch;
     }
 
