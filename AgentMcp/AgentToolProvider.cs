@@ -537,6 +537,29 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
         return result;
     }
 
+    private static CompositeFormat DefaultToolNameFormat => field ??= CompositeFormat.Parse("{0}_{1}");
+
+    private CompositeFormat GetToolNameFormat(string? mcpServerKey, string? rawNameFormat, string agentName)
+    {
+        if (rawNameFormat is not null)
+        {
+            try
+            {
+                return CompositeFormat.Parse(rawNameFormat);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex,
+                                  "Failed to parse tool name format '{RawNameFormat}' for MCP server '{ServerName}' for agent '{AgentName}'. Using the default tool name format.",
+                                  rawNameFormat,
+                                  mcpServerKey,
+                                  agentName);
+            }
+        }
+
+        return DefaultToolNameFormat;
+    }
+
     private async Task<IReadOnlyList<AITool>> GetMcpToolsAsync(string mcpServerKey, ElicitationHandler elicitationHandler, string agentName)
     {
         var mcpConfigs = options.CurrentValue.Mcp;
@@ -584,9 +607,35 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
             JsonSerializerOptions = serializerOptions,
         });
 
+        var nameFormat = GetToolNameFormat(mcpServerKey, mcpConfig.ToolNameFormat, agentName);
+
+        IReadOnlyList<AITool> result = [.. tools.Select(tool => new McpClientToolWrapper(tool, mcpServerKey, nameFormat))];
+
         logger.LogInformation("Loaded {Count} functions from MCP server '{ServerName}' for agent '{AgentName}'", tools.Count, mcpServerKey, agentName);
 
-        return [.. tools.Select(tool => new McpClientToolWrapper(tool, mcpServerKey))];
+        return result;
+    }
+
+    private static CompositeFormat DefaultToolCallTaskFinishPrompt => field ??= CompositeFormat.Parse("Background task for tool call {0} has finished. Result:\n");
+
+    private CompositeFormat GetToolCallTaskFinishPrompt(string? rawToolCallTaskFinishPrompt, string agentName)
+    {
+        if (rawToolCallTaskFinishPrompt is not null)
+        {
+            try
+            {
+                return CompositeFormat.Parse(rawToolCallTaskFinishPrompt);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex,
+                                  "Failed to parse tool call task finish prompt '{RawToolCallTaskFinishPrompt}' for agent '{AgentName}'. Using the default tool call task finish prompt.",
+                                  rawToolCallTaskFinishPrompt,
+                                  agentName);
+            }
+        }
+
+        return DefaultToolCallTaskFinishPrompt;
     }
 
     private async Task<KeyValuePair<string, AgentData>?> CreateAgentDataAsync(KeyValuePair<string, AgentConfiguration> pair)
@@ -613,8 +662,7 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
 
         var filter = await toolFilterProvider.CreateAsync(agent);
 
-        var toolCallTaskFinishPrompt = CompositeFormat.Parse(agent.ToolCallTaskFinishPrompt
-                                                             ?? "Background task for tool call {0} has finished. Result:\n");
+        var toolCallTaskFinishPrompt = GetToolCallTaskFinishPrompt(agent.ToolCallTaskFinishPrompt, name);
 
         AgentData agentData = new(name,
                                   functionInvokingChatClient,

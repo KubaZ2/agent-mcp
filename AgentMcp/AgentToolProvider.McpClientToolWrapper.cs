@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using ModelContextProtocol;
@@ -12,14 +13,14 @@ internal partial class AgentToolProvider
 {
     private sealed class McpClientToolWrapper : DelegatingAIFunction
     {
-        private readonly string _serverName;
-
-        public McpClientToolWrapper(McpClientTool tool, string serverName) : base(tool)
+        public McpClientToolWrapper(McpClientTool tool, string serverName, CompositeFormat nameFormat) : base(tool)
         {
-            _serverName = serverName;
+            var rawToolName = tool.Name;
+
+            Name = string.Format(null, nameFormat, serverName, rawToolName);
         }
 
-        public override string Name => $"{_serverName}_{base.Name}";
+        public override string Name { get; }
 
         [UnsafeAccessor(UnsafeAccessorKind.Field, Name = "_client")]
         private extern static ref McpClient GetClientCore(McpClientTool tool);
