@@ -31,8 +31,8 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
                 case "Agent":
                     TransformAgentProperty(node);
                     break;
-                case "Instruction":
-                    node["description"] = "The instruction to give to the agent";
+                case "Prompt":
+                    node["description"] = "The task for the agent to perform.";
                     break;
             }
         }
@@ -53,7 +53,7 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
             return;
         }
 
-        StringBuilder descriptionBuilder = new("The agent to run. Available agents:\n");
+        StringBuilder descriptionBuilder = new("The type of specialized agent to use for this task. Available agents:\n");
 
         foreach (var (name, agent) in agents)
         {
@@ -74,7 +74,7 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
         var tool = McpServerTool.Create(RunAgentAsync, new()
         {
             Name = "agent",
-            Description = "Runs an agent",
+            Description = "Launch a specialized agent to handle a complex, multi-step task. Delegate work here when reading across multiple files, running independent parallel tasks, or utilizing a specific agent's capabilities.",
             SchemaCreateOptions = new()
             {
                 TransformSchemaNode = TransformSchemaNode,
@@ -84,11 +84,11 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
         return tool;
     }
 
-    private async Task<string> RunAgentAsyncCore(AgentData agent, string instruction, McpServer server)
+    private async Task<string> RunAgentAsyncCore(AgentData agent, string prompt, McpServer server)
     {
         var (name, chatClient, tools, systemPrompt, toolCallTaskFinishPrompt, elicitationHandler, _) = agent;
 
-        ChatMessage userMessage = new(ChatRole.User, instruction);
+        ChatMessage userMessage = new(ChatRole.User, prompt);
 
         List<ChatMessage> messages = systemPrompt is null
             ? [userMessage]
@@ -162,9 +162,9 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
         return result;
     }
 
-    private async Task<string> RunAgentAsync([Description("Agent")] string agent, [Description("Instruction")] string instruction, McpServer server)
+    private async Task<string> RunAgentAsync([Description("Agent")] string agent, [Description("Prompt")] string prompt, McpServer server)
     {
-        logger.LogInformation("Running agent {Agent} with instruction: {Instruction}", agent, instruction);
+        logger.LogInformation("Running agent {Agent} with prompt: {Prompt}", agent, prompt);
 
         try
         {
@@ -184,7 +184,7 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
 
             try
             {
-                return await RunAgentAsyncCore(agentData, instruction, server);
+                return await RunAgentAsyncCore(agentData, prompt, server);
             }
             finally
             {
