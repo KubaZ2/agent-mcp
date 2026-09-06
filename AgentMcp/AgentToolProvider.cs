@@ -84,9 +84,30 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
         return tool;
     }
 
+    private static async Task<ChatResponse> GetResponseAsync(FunctionInvokingChatClient chatClient,
+                                                             IReadOnlyList<ChatMessage> messages,
+                                                             IReadOnlyList<AITool> tools,
+                                                             IToolInvocationFilter toolInvocationFilter,
+                                                             CancellationToken cancellationToken = default)
+    {
+        var toolsWithFilterResults = await Task.WhenAll(tools.Select(async tool =>
+        {
+            return (Tool: tool, FilterResult: await toolInvocationFilter.FilterAsync(tool, cancellationToken));
+        }));
+
+        var filteredTools = toolsWithFilterResults
+            .Where(t => t.FilterResult is not ToolFilterResult.Deny)
+            .Select(t => t.Tool);
+
+        return await chatClient.GetResponseAsync(messages, new ChatOptions
+        {
+            Tools = [.. filteredTools],
+        }, cancellationToken);
+    }
+
     private async Task<string> RunAgentAsyncCore(AgentData agent, string prompt, McpServer server)
     {
-        var (name, chatClient, tools, systemPrompt, toolCallTaskFinishPrompt, elicitationHandler, _) = agent;
+        var (name, chatClient, tools, systemPrompt, toolCallTaskFinishPrompt, elicitationHandler, toolInvocationFilter) = agent;
 
         ChatMessage userMessage = new(ChatRole.User, prompt);
 
@@ -108,10 +129,7 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
             return HandleElicitationAsync(request, server, cancellationToken);
         };
 
-        var response = await chatClient.GetResponseAsync(messages, new ChatOptions
-        {
-            Tools = [.. tools],
-        });
+        var response = await GetResponseAsync(chatClient, messages, tools, toolInvocationFilter);
 
         if (logger.IsEnabled(LogLevel.Debug))
             logger.LogDebug("Agent {Agent} response: {Response}", name, JsonSerializer.Serialize(response, AIJsonUtilities.DefaultOptions.GetTypeInfo<ChatResponse>()));
@@ -144,10 +162,7 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
                 .. toolResult.Content.ToAIContents()
             ]));
 
-            response = await chatClient.GetResponseAsync(messages, new ChatOptions
-            {
-                Tools = [.. tools],
-            });
+            response = await GetResponseAsync(chatClient, messages, tools, toolInvocationFilter);
 
             if (logger.IsEnabled(LogLevel.Debug))
                 logger.LogDebug("Agent {Agent} response: {Response}", name, JsonSerializer.Serialize(response, AIJsonUtilities.DefaultOptions.GetTypeInfo<ChatResponse>()));
@@ -215,7 +230,7 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
         await semaphore.WaitAsync(cancellationToken);
         try
         {
-            var filterResult = await agent.ToolInvocationFilter.FilterAsync(function, context.Arguments, cancellationToken);
+            var filterResult = await agent.ToolInvocationFilter.FilterAsync(function, cancellationToken);
 
             if (await HandleFilterResultAsync(context, agent, server, function, filterResult, cancellationToken) is { } response)
                 return response;

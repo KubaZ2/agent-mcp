@@ -14,7 +14,7 @@ internal enum ToolFilterResult : byte
 
 internal interface IToolInvocationFilter
 {
-    public ValueTask<ToolFilterResult> FilterAsync(AIFunction tool, AIFunctionArguments arguments, CancellationToken cancellationToken);
+    public ValueTask<ToolFilterResult> FilterAsync(AITool tool, CancellationToken cancellationToken);
 
     public ValueTask AddAutoApproveToolAsync(string name, CancellationToken cancellationToken);
 
@@ -44,7 +44,7 @@ internal class DefaultToolInvocationFilter(ToolFilterResult defaultResult, IRead
         return glob.IsMatch;
     }
 
-    public ValueTask<ToolFilterResult> FilterAsync(AIFunction tool, AIFunctionArguments arguments, CancellationToken cancellationToken)
+    public ValueTask<ToolFilterResult> FilterAsync(AITool tool, CancellationToken cancellationToken)
     {
         var name = tool.Name;
 
