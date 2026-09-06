@@ -7,7 +7,7 @@ using ElicitationHandler = System.Func<ModelContextProtocol.Protocol.ElicitReque
 
 namespace AgentMcp;
 
-internal partial class RunAgentProvider
+internal partial class AgentToolProvider
 {
     private record AgentData(string Name, FunctionInvokingChatClient ChatClient, IReadOnlyList<AITool> Tools, string? SystemPrompt, CompositeFormat ToolCallTaskFinishPrompt, StrongBox<ElicitationHandler> ElicitationHandler, IToolInvocationFilter ToolInvocationFilter)
     {

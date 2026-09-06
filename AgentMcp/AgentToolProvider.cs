@@ -17,7 +17,7 @@ using ElicitationHandler = System.Func<ModelContextProtocol.Protocol.ElicitReque
 
 namespace AgentMcp;
 
-internal partial class RunAgentProvider(IOptionsMonitor<Options> options, ILogger<RunAgentProvider> logger, IChatClientProvider chatClientProvider, IMcpClientProvider mcpClientProvider, IToolInvocationFilterProvider toolFilterProvider) : IMcpServerToolProvider, IHostedService
+internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogger<AgentToolProvider> logger, IChatClientProvider chatClientProvider, IMcpClientProvider mcpClientProvider, IToolInvocationFilterProvider toolFilterProvider) : IMcpServerToolProvider, IHostedService
 {
     private FrozenDictionary<string, AgentData>? _agentData;
 
@@ -511,7 +511,7 @@ internal partial class RunAgentProvider(IOptionsMonitor<Options> options, ILogge
 
         var tool = McpServerTool.Create(RunAgentAsync, new()
         {
-            Name = "run_agent",
+            Name = "agent",
             Description = "Runs an agent",
             SchemaCreateOptions = new()
             {

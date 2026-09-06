@@ -8,7 +8,7 @@ using ModelContextProtocol.Protocol;
 
 namespace AgentMcp;
 
-internal partial class RunAgentProvider
+internal partial class AgentToolProvider
 {
     private sealed class McpClientToolWrapper : DelegatingAIFunction
     {

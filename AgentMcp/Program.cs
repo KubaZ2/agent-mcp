@@ -78,9 +78,9 @@ services.AddSingleton<IMcpClientProvider, DefaultMcpClientProvider>();
 services.AddSingleton<IToolInvocationFilter, DefaultToolInvocationFilter>();
 services.AddSingleton<IToolInvocationFilterProvider, DefaultToolInvocationFilterProvider>();
 
-services.AddSingleton<RunAgentProvider>();
-services.AddHostedService(services => services.GetRequiredService<RunAgentProvider>());
-services.AddSingleton(services => services.GetRequiredService<RunAgentProvider>().GetTool());
+services.AddSingleton<AgentToolProvider>();
+services.AddHostedService(services => services.GetRequiredService<AgentToolProvider>());
+services.AddSingleton(services => services.GetRequiredService<AgentToolProvider>().GetTool());
 
 services
     .AddOptions<Options>()
