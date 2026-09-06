@@ -55,7 +55,7 @@ internal class AgentConfiguration
 
     public string? SystemPrompt { get; set; }
 
-    public string? ToolCallTaskFinishPrompt { get; set; }
+    public string? ToolCallTaskFinishPromptFormat { get; set; }
 
     [Required]
     public string Provider { get; set; } = null!;

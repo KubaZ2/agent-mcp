@@ -11,16 +11,9 @@ namespace AgentMcp;
 
 internal partial class AgentToolProvider
 {
-    private sealed class McpClientToolWrapper : DelegatingAIFunction
+    private sealed class McpClientToolWrapper(McpClientTool tool, string serverName, CompositeFormat nameFormat) : DelegatingAIFunction(tool)
     {
-        public McpClientToolWrapper(McpClientTool tool, string serverName, CompositeFormat nameFormat) : base(tool)
-        {
-            var rawToolName = tool.Name;
-
-            Name = string.Format(null, nameFormat, serverName, rawToolName);
-        }
-
-        public override string Name { get; }
+        public override string Name { get; } = string.Format(null, nameFormat, serverName, tool.Name);
 
         [UnsafeAccessor(UnsafeAccessorKind.Field, Name = "_client")]
         private extern static ref McpClient GetClientCore(McpClientTool tool);

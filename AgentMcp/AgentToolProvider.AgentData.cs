@@ -13,7 +13,7 @@ internal partial class AgentToolProvider
                              FunctionInvokingChatClient ChatClient,
                              IReadOnlyList<AITool> Tools,
                              string? SystemPrompt,
-                             CompositeFormat ToolCallTaskFinishPrompt,
+                             CompositeFormat ToolCallTaskFinishPromptFormat,
                              StrongBox<ElicitationHandler> ElicitationHandler,
                              IToolInvocationFilter ToolInvocationFilter)
     {
