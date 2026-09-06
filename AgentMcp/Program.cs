@@ -1,6 +1,7 @@
 ﻿using AgentMcp;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Extensions.Tasks;
+using Options = AgentMcp.Options;
 
 TransportMode mode;
 
