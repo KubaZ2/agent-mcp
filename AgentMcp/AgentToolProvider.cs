@@ -21,6 +21,184 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
 {
     private FrozenDictionary<string, AgentData>? _agentData;
 
+    private JsonNode TransformSchemaNode(AIJsonSchemaCreateContext context, JsonNode node)
+    {
+        var jsonDescription = node["description"];
+        if (jsonDescription is JsonValue jsonValue && jsonValue.TryGetValue<string>(out var description))
+        {
+            switch (description)
+            {
+                case "Agent":
+                    TransformAgentProperty(node);
+                    break;
+                case "Instruction":
+                    node["description"] = "The instruction to give to the agent";
+                    break;
+            }
+        }
+
+        return node;
+    }
+
+    private void TransformAgentProperty(JsonNode node)
+    {
+        JsonArray agentsEnumSchema = [];
+
+        var agents = options.CurrentValue.Agents;
+
+        if (agents is null)
+        {
+            logger.LogWarning("No agents found in options");
+
+            return;
+        }
+
+        StringBuilder descriptionBuilder = new("The agent to run. Available agents:\n");
+
+        foreach (var (name, agent) in agents)
+        {
+            agentsEnumSchema.Add((JsonNode)JsonValue.Create(name));
+
+            descriptionBuilder.Append($"- {name}: {agent.Description}\n");
+        }
+
+        node["enum"] = agentsEnumSchema;
+
+        node["description"] = descriptionBuilder.ToString(0, descriptionBuilder.Length - 1);
+    }
+
+    public McpServerTool GetTool()
+    {
+        var agents = options.CurrentValue.Agents;
+
+        var tool = McpServerTool.Create(RunAgentAsync, new()
+        {
+            Name = "agent",
+            Description = "Runs an agent",
+            SchemaCreateOptions = new()
+            {
+                TransformSchemaNode = TransformSchemaNode,
+            },
+        });
+
+        return tool;
+    }
+
+    private async Task<string> RunAgentAsyncCore(AgentData agent, string instruction, McpServer server)
+    {
+        var (name, chatClient, tools, systemPrompt, toolCallTaskFinishPrompt, elicitationHandler, _) = agent;
+
+        ChatMessage userMessage = new(ChatRole.User, instruction);
+
+        List<ChatMessage> messages = systemPrompt is null
+            ? [userMessage]
+            : [new(ChatRole.System, systemPrompt), userMessage];
+
+        chatClient.FunctionInvoker = (context, cancellationToken) => HandleFunctionInvocationAsync(context, agent, server, cancellationToken);
+
+        elicitationHandler.Value = (request, cancellationToken) =>
+        {
+            if (request is null)
+            {
+                logger.LogWarning("Elicitation request is null");
+
+                return new(new ElicitResult());
+            }
+
+            return HandleElicitationAsync(request, server, cancellationToken);
+        };
+
+        var response = await chatClient.GetResponseAsync(messages, new ChatOptions
+        {
+            Tools = [.. tools],
+        });
+
+        if (logger.IsEnabled(LogLevel.Debug))
+            logger.LogDebug("Agent {Agent} response: {Response}", name, JsonSerializer.Serialize(response, AIJsonUtilities.DefaultOptions.GetTypeInfo<ChatResponse>()));
+
+        messages.AddMessages(response);
+
+        while (true)
+        {
+            var taskResult = await agent.WaitForToolTaskCompletionAsync();
+
+            if (taskResult is null)
+                break;
+
+            if (taskResult.TaskResult is not CompletedTaskResult completedTask)
+            {
+                if (logger.IsEnabled(LogLevel.Warning))
+                    logger.LogWarning("Agent {Agent} received non-completed task result: {Result}", name, JsonSerializer.Serialize(taskResult, McpTasksJsonContext.Default.GetTaskResult));
+
+                continue;
+            }
+
+            if (logger.IsEnabled(LogLevel.Information))
+                logger.LogInformation("Agent {Agent} received completed task result: {Result}", name, JsonSerializer.Serialize(completedTask, McpTasksJsonContext.Default.CompletedTaskResult));
+
+            var toolResult = JsonSerializer.Deserialize(completedTask.Result, McpJsonUtilities.DefaultOptions.GetTypeInfo<CallToolResult>())!;
+
+            messages.Add(new(ChatRole.Tool,
+            [
+                new TextContent(string.Format(null, toolCallTaskFinishPrompt, taskResult.CallId)),
+                .. toolResult.Content.ToAIContents()
+            ]));
+
+            response = await chatClient.GetResponseAsync(messages, new ChatOptions
+            {
+                Tools = [.. tools],
+            });
+
+            if (logger.IsEnabled(LogLevel.Debug))
+                logger.LogDebug("Agent {Agent} response: {Response}", name, JsonSerializer.Serialize(response, AIJsonUtilities.DefaultOptions.GetTypeInfo<ChatResponse>()));
+
+            messages.AddMessages(response);
+        }
+
+        var result = response.Text;
+
+        logger.LogInformation("Agent {Agent} completed with result: {Result}", name, result);
+
+        return result;
+    }
+
+    private async Task<string> RunAgentAsync([Description("Agent")] string agent, [Description("Instruction")] string instruction, McpServer server)
+    {
+        logger.LogInformation("Running agent {Agent} with instruction: {Instruction}", agent, instruction);
+
+        try
+        {
+            if (!_agentData!.TryGetValue(agent, out var agentData))
+            {
+                logger.LogWarning("No agent data found for agent {Agent}", agent);
+
+                return $"Agent '{agent}' does not exist.";
+            }
+
+            if (!agentData.TryEnter())
+            {
+                logger.LogWarning("Agent {Agent} is already running. Please wait for it to finish.", agentData.Name);
+
+                return $"Agent {agent} is already running. Please wait for it to finish.";
+            }
+
+            try
+            {
+                return await RunAgentAsyncCore(agentData, instruction, server);
+            }
+            finally
+            {
+                agentData.Exit();
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Agent {Agent} failed with exception: {Exception}", agent, ex.Message);
+
+            return $"Agent {agent} failed with exception: {ex.Message}";
+        }
+    }
+
     private static JsonElement MarshalMcpResult<T>(T result)
     {
         return JsonSerializer.SerializeToElement(result, McpJsonUtilities.DefaultOptions.GetTypeInfo<T>());
@@ -342,184 +520,6 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
             logger.LogDebug("Elicitation request handled successfully: {Result}", JsonSerializer.Serialize(result, McpJsonUtilities.DefaultOptions.GetTypeInfo<ElicitResult>()));
 
         return result;
-    }
-
-    private async Task<string> RunAgentAsyncCore(AgentData agent, string instruction, McpServer server)
-    {
-        var (name, chatClient, tools, systemPrompt, toolCallTaskFinishPrompt, elicitationHandler, _) = agent;
-
-        ChatMessage userMessage = new(ChatRole.User, instruction);
-
-        List<ChatMessage> messages = systemPrompt is null
-            ? [userMessage]
-            : [new(ChatRole.System, systemPrompt), userMessage];
-
-        chatClient.FunctionInvoker = (context, cancellationToken) => HandleFunctionInvocationAsync(context, agent, server, cancellationToken);
-
-        elicitationHandler.Value = (request, cancellationToken) =>
-        {
-            if (request is null)
-            {
-                logger.LogWarning("Elicitation request is null");
-
-                return new(new ElicitResult());
-            }
-
-            return HandleElicitationAsync(request, server, cancellationToken);
-        };
-
-        var response = await chatClient.GetResponseAsync(messages, new ChatOptions
-        {
-            Tools = [.. tools],
-        });
-
-        if (logger.IsEnabled(LogLevel.Debug))
-            logger.LogDebug("Agent {Agent} response: {Response}", name, JsonSerializer.Serialize(response, AIJsonUtilities.DefaultOptions.GetTypeInfo<ChatResponse>()));
-
-        messages.AddMessages(response);
-
-        while (true)
-        {
-            var taskResult = await agent.WaitForToolTaskCompletionAsync();
-
-            if (taskResult is null)
-                break;
-
-            if (taskResult.TaskResult is not CompletedTaskResult completedTask)
-            {
-                if (logger.IsEnabled(LogLevel.Warning))
-                    logger.LogWarning("Agent {Agent} received non-completed task result: {Result}", name, JsonSerializer.Serialize(taskResult, McpTasksJsonContext.Default.GetTaskResult));
-
-                continue;
-            }
-
-            if (logger.IsEnabled(LogLevel.Information))
-                logger.LogInformation("Agent {Agent} received completed task result: {Result}", name, JsonSerializer.Serialize(completedTask, McpTasksJsonContext.Default.CompletedTaskResult));
-
-            var toolResult = JsonSerializer.Deserialize(completedTask.Result, McpJsonUtilities.DefaultOptions.GetTypeInfo<CallToolResult>())!;
-
-            messages.Add(new(ChatRole.Tool,
-            [
-                new TextContent(string.Format(null, toolCallTaskFinishPrompt, taskResult.CallId)),
-                .. toolResult.Content.ToAIContents()
-            ]));
-
-            response = await chatClient.GetResponseAsync(messages, new ChatOptions
-            {
-                Tools = [.. tools],
-            });
-
-            if (logger.IsEnabled(LogLevel.Debug))
-                logger.LogDebug("Agent {Agent} response: {Response}", name, JsonSerializer.Serialize(response, AIJsonUtilities.DefaultOptions.GetTypeInfo<ChatResponse>()));
-
-            messages.AddMessages(response);
-        }
-
-        var result = response.Text;
-
-        logger.LogInformation("Agent {Agent} completed with result: {Result}", name, result);
-
-        return result;
-    }
-
-    private async Task<string> RunAgentAsync([Description("Agent")] string agent, [Description("Instruction")] string instruction, McpServer server)
-    {
-        logger.LogInformation("Running agent {Agent} with instruction: {Instruction}", agent, instruction);
-
-        try
-        {
-            if (!_agentData!.TryGetValue(agent, out var agentData))
-            {
-                logger.LogWarning("No agent data found for agent {Agent}", agent);
-
-                return $"Agent '{agent}' does not exist.";
-            }
-
-            if (!agentData.TryEnter())
-            {
-                logger.LogWarning("Agent {Agent} is already running. Please wait for it to finish.", agentData.Name);
-
-                return $"Agent {agent} is already running. Please wait for it to finish.";
-            }
-
-            try
-            {
-                return await RunAgentAsyncCore(agentData, instruction, server);
-            }
-            finally
-            {
-                agentData.Exit();
-            }
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Agent {Agent} failed with exception: {Exception}", agent, ex.Message);
-
-            return $"Agent {agent} failed with exception: {ex.Message}";
-        }
-    }
-
-    private JsonNode TransformSchemaNode(AIJsonSchemaCreateContext context, JsonNode node)
-    {
-        var jsonDescription = node["description"];
-        if (jsonDescription is JsonValue jsonValue && jsonValue.TryGetValue<string>(out var description))
-        {
-            switch (description)
-            {
-                case "Agent":
-                    TransformAgentProperty(node);
-                    break;
-                case "Instruction":
-                    node["description"] = "The instruction to give to the agent";
-                    break;
-            }
-        }
-
-        return node;
-    }
-
-    private void TransformAgentProperty(JsonNode node)
-    {
-        JsonArray agentsEnumSchema = [];
-
-        var agents = options.CurrentValue.Agents;
-
-        if (agents is null)
-        {
-            logger.LogWarning("No agents found in options");
-
-            return;
-        }
-
-        StringBuilder descriptionBuilder = new("The agent to run. Available agents:\n");
-
-        foreach (var (name, agent) in agents)
-        {
-            agentsEnumSchema.Add((JsonNode)JsonValue.Create(name));
-
-            descriptionBuilder.Append($"- {name}: {agent.Description}\n");
-        }
-
-        node["enum"] = agentsEnumSchema;
-
-        node["description"] = descriptionBuilder.ToString(0, descriptionBuilder.Length - 1);
-    }
-
-    public McpServerTool GetTool()
-    {
-        var agents = options.CurrentValue.Agents;
-
-        var tool = McpServerTool.Create(RunAgentAsync, new()
-        {
-            Name = "agent",
-            Description = "Runs an agent",
-            SchemaCreateOptions = new()
-            {
-                TransformSchemaNode = TransformSchemaNode,
-            },
-        });
-
-        return tool;
     }
 
     private async Task<IReadOnlyList<AITool>> GetMcpToolsAsync(string mcpServerKey, ElicitationHandler elicitationHandler, string agentName)
