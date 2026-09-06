@@ -415,8 +415,11 @@ internal partial class RunAgentProvider(IOptionsMonitor<Options> options, ILogge
             messages.AddMessages(response);
         }
 
+        var result = response.Text;
 
-        return response.Text;
+        logger.LogInformation("Agent {Agent} completed with result: {Result}", name, result);
+
+        return result;
     }
 
     private async Task<string> RunAgentAsync([Description("Agent")] string agent, [Description("Instruction")] string instruction, McpServer server)
