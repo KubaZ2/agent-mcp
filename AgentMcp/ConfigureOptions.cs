@@ -1,6 +1,8 @@
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Options;
 
+namespace AgentMcp;
+
 internal partial class ConfigureOptions(IConfiguration configuration, IServiceProvider services) : IConfigureOptions<Options>
 {
     public void Configure(Options options)

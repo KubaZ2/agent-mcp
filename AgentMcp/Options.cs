@@ -1,7 +1,8 @@
 using System.ComponentModel.DataAnnotations;
-using AgentMcp;
 using Microsoft.Extensions.Options;
 using ModelContextProtocol.Client;
+
+namespace AgentMcp;
 
 internal partial class Options
 {
