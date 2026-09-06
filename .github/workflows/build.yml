@@ -91,7 +91,7 @@ jobs:
         with:
           name: agent-mcp-${{ matrix.rid }}
           path: |
-            AgentMcp/bin/Release/${{ matrix.rid }}/publish/{{ matrix.binary }}
+            AgentMcp/bin/Release/${{ matrix.rid }}/publish/${{ matrix.binary }}
 
   publish:
     needs: build
