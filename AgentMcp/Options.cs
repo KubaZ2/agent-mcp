@@ -47,6 +47,8 @@ internal class OllamaProviderConfiguration : IProviderConfiguration
     public string? Endpoint { get; set; }
 
     public double? TimeoutSeconds { get; set; }
+
+    public IDictionary<string, object>? Options { get; set; }
 }
 
 internal class AgentConfiguration
