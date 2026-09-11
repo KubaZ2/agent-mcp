@@ -1,5 +1,7 @@
 using System.ClientModel;
 using System.ClientModel.Primitives;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Anthropic;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
@@ -14,7 +16,7 @@ internal interface IChatClientProvider
     public ValueTask<IChatClient?> CreateChatClientAsync(AgentConfiguration agent);
 }
 
-internal class DefaultChatClientProvider(ILogger<DefaultChatClientProvider> logger, IOptions<Options> options) : IChatClientProvider
+internal partial class DefaultChatClientProvider(ILogger<DefaultChatClientProvider> logger, IOptions<Options> options) : IChatClientProvider
 {
     private const double DefaultTimeoutSeconds = 1 << 10;
 
@@ -40,7 +42,7 @@ internal class DefaultChatClientProvider(ILogger<DefaultChatClientProvider> logg
         {
             OpenAIProviderConfiguration openAIProvider => CreateOpenAIClient(agent, openAIProvider),
             AnthropicProviderConfiguration anthropicProvider => CreateAnthropicClient(anthropicProvider),
-            OllamaProviderConfiguration ollamaProvider => CreateOllamaClient(ollamaProvider),
+            OllamaProviderConfiguration ollamaProvider => CreateOllamaClient(agent, ollamaProvider),
             _ => throw new NotSupportedException($"Provider type {provider.GetType().Name} is not supported.")
         };
 
@@ -86,8 +88,25 @@ internal class DefaultChatClientProvider(ILogger<DefaultChatClientProvider> logg
         return new(CreateHttpClient(provider.TimeoutSeconds), provider.Endpoint is { } endpoint ? new(endpoint) : null, authorizations: authorizations);
     }
 
-    private static OllamaClient CreateOllamaClient(OllamaProviderConfiguration provider)
+    private static IChatClient CreateOllamaClient(AgentConfiguration agent, OllamaProviderConfiguration provider)
     {
-        return new(CreateHttpClient(provider.TimeoutSeconds), provider.Endpoint is { } endpoint ? new(endpoint) : null);
+        OllamaClient client = new(CreateHttpClient(provider.TimeoutSeconds), provider.Endpoint is { } endpoint ? new(endpoint) : null);
+
+        return ((IChatClient)client).AsBuilder().ConfigureOptions(o =>
+        {
+            o.RawRepresentationFactory = client =>
+            {
+                ChatRequest request = new()
+                {
+                    Model = agent.Model,
+                    Messages = [],
+                };
+
+                if (provider.Options is { } options)
+                    (request.Options ??= new()).AdditionalProperties = options;
+
+                return request;
+            };
+        }).Build();
     }
 }

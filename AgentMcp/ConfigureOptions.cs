@@ -1,4 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Options;
 
 namespace AgentMcp;
@@ -64,7 +66,7 @@ internal partial class ConfigureOptions(IConfiguration configuration, IServicePr
             {
                 _ when type.Equals("openai", c) => Validated(providerSection.Get<OpenAIProviderConfiguration>(), services, type, providerName),
                 _ when type.Equals("anthropic", c) => Validated(providerSection.Get<AnthropicProviderConfiguration>(), services, type, providerName),
-                _ when type.Equals("ollama", c) => Validated(providerSection.Get<OllamaProviderConfiguration>(), services, type, providerName),
+                _ when type.Equals("ollama", c) => Validated(TransformOllamaConfig(providerSection.Get<OllamaProviderConfiguration>(), providerSection), services, type, providerName),
                 _ => throw new InvalidOperationException($"Unknown provider type '{type}' for provider '{providerName}'."),
             };
 
@@ -73,6 +75,17 @@ internal partial class ConfigureOptions(IConfiguration configuration, IServicePr
         }
 
         options.Providers = providers;
+
+        static OllamaProviderConfiguration? TransformOllamaConfig(OllamaProviderConfiguration? provider, IConfigurationSection section)
+        {
+            if (provider is null)
+                return null;
+
+            if (section["Options"] is { } optionsJson)
+                provider.Options = JsonSerializer.Deserialize(optionsJson, OllamaOptionsSerialization.Default.IDictionaryStringObject);
+
+            return provider;
+        }
 
         static T Validated<T>(T? configuration, IServiceProvider services, string type, string name)
             where T : class
@@ -118,5 +131,7 @@ internal partial class ConfigureOptions(IConfiguration configuration, IServicePr
             throw new InvalidOperationException(messageFunc(data, failureMessage));
         }
     }
-}
 
+    [JsonSerializable(typeof(IDictionary<string, object>))]
+    private partial class OllamaOptionsSerialization : JsonSerializerContext;
+}
