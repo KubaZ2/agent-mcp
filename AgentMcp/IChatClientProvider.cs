@@ -1,7 +1,5 @@
 using System.ClientModel;
 using System.ClientModel.Primitives;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using Anthropic;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
@@ -16,7 +14,7 @@ internal interface IChatClientProvider
     public ValueTask<IChatClient?> CreateChatClientAsync(AgentConfiguration agent);
 }
 
-internal partial class DefaultChatClientProvider(ILogger<DefaultChatClientProvider> logger, IOptions<Options> options) : IChatClientProvider
+internal class DefaultChatClientProvider(ILogger<DefaultChatClientProvider> logger, IOptions<Options> options) : IChatClientProvider
 {
     private const double DefaultTimeoutSeconds = 1 << 10;
 
