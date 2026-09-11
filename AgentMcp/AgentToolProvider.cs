@@ -23,7 +23,10 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
 
     private JsonNode TransformSchemaNode(AIJsonSchemaCreateContext context, JsonNode node)
     {
-        var jsonDescription = node["description"];
+        if (node is not JsonObject jsonObject)
+            return node;
+
+        var jsonDescription = jsonObject["description"];
         if (jsonDescription is JsonValue jsonValue && jsonValue.TryGetValue<string>(out var description))
         {
             switch (description)
@@ -71,7 +74,7 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
     {
         var agents = options.CurrentValue.Agents;
 
-        var tool = McpServerTool.Create(RunAgentAsync, new()
+        var tool = McpServerTool.Create(AgentAsync, new()
         {
             Name = "agent",
             Description = "Launch a specialized agent to handle a complex, multi-step task. Delegate work here when reading across multiple files, running independent parallel tasks, or utilizing a specific agent's capabilities.",
@@ -105,7 +108,21 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
         }, cancellationToken);
     }
 
-    private async Task<string> RunAgentAsyncCore(AgentData agent, string prompt, McpServer server)
+    private CallToolResult CreateSimpleResult(string message, bool isError)
+    {
+        return new()
+        {
+            IsError = isError,
+            Content = [
+                new TextContentBlock
+                {
+                    Text = message,
+                },
+            ],
+        };
+    }
+
+    private async Task<CallToolResult> AgentAsyncCore(AgentData agent, string prompt, McpServer server)
     {
         var (name, chatClient, tools, systemPrompt, toolCallTaskFinishPromptFormat, elicitationHandler, toolInvocationFilter) = agent;
 
@@ -174,10 +191,10 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
 
         logger.LogInformation("Agent {Agent} completed with result: {Result}", name, result);
 
-        return result;
+        return CreateSimpleResult(result, isError: false);
     }
 
-    private async Task<string> RunAgentAsync([Description("Agent")] string agent, [Description("Prompt")] string prompt, McpServer server)
+    private async Task<CallToolResult> AgentAsync([Description("Agent")] string agent, [Description("Prompt")] string prompt, McpServer server)
     {
         logger.LogInformation("Running agent {Agent} with prompt: {Prompt}", agent, prompt);
 
@@ -187,19 +204,19 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
             {
                 logger.LogWarning("No agent data found for agent {Agent}", agent);
 
-                return $"Agent '{agent}' does not exist.";
+                return CreateSimpleResult($"Agent '{agent}' does not exist.", isError: true);
             }
 
             if (!agentData.TryEnter())
             {
                 logger.LogWarning("Agent {Agent} is already running. Please wait for it to finish.", agentData.Name);
 
-                return $"Agent {agent} is already running. Please wait for it to finish.";
+                return CreateSimpleResult($"Agent '{agent}' is already running. Please wait for it to finish.", isError: true);
             }
 
             try
             {
-                return await RunAgentAsyncCore(agentData, prompt, server);
+                return await AgentAsyncCore(agentData, prompt, server);
             }
             finally
             {
@@ -210,7 +227,7 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
         {
             logger.LogError(ex, "Agent {Agent} failed with exception: {Exception}", agent, ex.Message);
 
-            return $"Agent {agent} failed with exception: {ex.Message}";
+            return CreateSimpleResult($"Agent '{agent}' failed with exception: {ex.Message}", isError: true);
         }
     }
 
