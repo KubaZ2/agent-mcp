@@ -30,7 +30,7 @@ Because Agent MCP Server is compiled with Native AOT, there are **no prerequisit
 
 ### Installation
 
-Download the latest standalone binary for your operating system from [the releases page](https://github.com/KubaZ2/agent-mcp/releases/latest):
+Download the latest standalone binary for your operating system from [the releases page](https://github.com/KubaZ2/agent-mcp/releases/latest).
 
 ### Running the Server
 
@@ -50,8 +50,7 @@ You can run the server via standard I/O (default) or HTTP. You must provide a co
 Agent MCP Server relies heavily on a configuration file to define LLM Providers, downstream MCP servers, and your Agents. Below is a comprehensive example using an `.ini` file format.
 
 ```ini
-# PROVIDERS
-# Configure your LLM backends here.
+# Configure your LLM providers here.
 # Supported Types: openai, anthropic, ollama
 
 [Providers:claude]
@@ -62,7 +61,6 @@ ApiKey = sk-your-anthropic-api-key
 Type = ollama
 Endpoint = http://localhost:11434
 
-# DOWNSTREAM MCP SERVERS
 # Configure the MCP servers your agents can use.
 
 # Example of a stdio-based downstream server
@@ -76,7 +74,6 @@ Args:2 = /home/myuser/projects/myproject
 [Mcp:websearch]
 Endpoint = http://localhost:8080/mcp
 
-# AGENTS
 # Define specialized agents exposed to the client.
 
 [Agents:researcher]
@@ -93,7 +90,7 @@ Description = Use this agent to read and modify local files.
 SystemPrompt = You are a principal software engineer. Complete the user's task step by step.
 Provider = claude
 Model = claude-fable-5-1
-# Connects this agent to the Filesystem downstream MCP
+# Connects this agent to the filesystem downstream MCP
 Mcp:0 = filesystem
 # Require user approval for tools by default
 DefaultToolPolicy = Ask
@@ -104,6 +101,8 @@ AutoApproveTools:1 = /filesystem_list_.+/
 AutoDenyTools:0 = filesystem_move_file
 ```
 
+For more configuration options, please refer to the [Wiki](https://github.com/KubaZ2/agent-mcp/wiki/Configuration).
+
 ### Policy & Tool Filtering
 
 The `DefaultToolPolicy` controls how the agent handles tool calls to downstream MCP servers:
@@ -112,7 +111,7 @@ The `DefaultToolPolicy` controls how the agent handles tool calls to downstream 
 * `Allow`: The agent executes the tool immediately.
 * `Deny`: The tool is hidden from the agent and cannot be called.
 
-You can bypass the default policy for specific tools using `AutoApproveTools` and `AutoDenyTools`. These fields support Glob (e.g., `read_*`) and Regex patterns (indicated by wrapping the pattern in slashes, e.g., `/read_.+/`).
+You can bypass the default policy for specific tools using `AutoApproveTools` and `AutoDenyTools`. These fields support Glob (e.g., `filesystem_read_*`) and Regex patterns (indicated by wrapping the pattern in slashes, e.g., `/filesystem_read_.+/`). Note that the tools are prefixed with the MCP server name followed by an underscore (e.g., `filesystem_read_file`, `websearch_search`). That's how the tools are presented to the agent. This behavior can be configured or disabled per downstream MCP server. Refer to the [Wiki](https://github.com/KubaZ2/agent-mcp/wiki/Configuration) for more details.
 
 Elicitation prompts allow the user to choose from four options:
 - **Approve Once**: Approve this tool call for this agent, but ask again next time
