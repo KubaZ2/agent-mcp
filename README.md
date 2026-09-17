@@ -10,7 +10,7 @@ By calling the `agent` tool, your primary MCP client can spawn and delegate comp
 * **Downstream MCP Federation:** Connects to other Stdio and HTTP MCP servers, passing their tools to your configured agents.
 * **Multi-Provider Support:** Supports OpenAI, Anthropic, and Ollama compatible LLM backends.
 * **Human-in-the-Loop (Elicitation):** Natively supports the MCP Elicitation capability. If an agent tries to call a tool, the server can pause and ask the user for approval (Approve Once, Approve Always, Deny Once, Deny Always). Also supports forwarding the elicitation prompts of downstream MCP servers to the client.
-* **Granular Tool Filtering:** Configure default tool policies (`Ask`, `Allow`, `Deny`) and specify `AutoApproveTools` or `AutoDenyTools` using glob or regex patterns.
+* **Granular Tool Filtering:** Configure default tool policies (`Ask` (default), `Allow`, `Deny`) and specify `AutoApproveTools` or `AutoDenyTools` using glob or regex patterns.
 * **Long-Running Tasks:** Built-in support for the MCP Tasks extension. Agents can trigger asynchronous downstream tools, and the server will automatically poll until completion without blocking the client.
 * **Dual Hosting Modes:** Can run as a standard `stdio` MCP server or an `http` MCP server.
 * **Native AOT:** Pre-compiled native binaries mean incredibly fast startup times, low memory usage, and no runtime dependencies needed.
@@ -59,7 +59,6 @@ ApiKey = sk-your-anthropic-api-key
 
 [Providers:my-local-ollama]
 Type = ollama
-Endpoint = http://localhost:11434
 
 # Configure the MCP servers your agents can use.
 
@@ -92,8 +91,6 @@ Provider = claude
 Model = claude-fable-5-1
 # Connects this agent to the filesystem downstream MCP
 Mcp:0 = filesystem
-# Require user approval for tools by default
-DefaultToolPolicy = Ask
 # Auto-approve safe read operations (supports glob and regex)
 AutoApproveTools:0 = filesystem_read_*
 AutoApproveTools:1 = /filesystem_list_.+/
@@ -107,11 +104,11 @@ For more configuration options, please refer to the [Wiki](https://github.com/Ku
 
 The `DefaultToolPolicy` controls how the agent handles tool calls to downstream MCP servers:
 
-* `Ask`: The server uses MCP Elicitation to prompt the user in their client GUI.
+* `Ask`: Default, the server uses MCP Elicitation to prompt the user in their client GUI.
 * `Allow`: The agent executes the tool immediately.
 * `Deny`: The tool is hidden from the agent and cannot be called.
 
-You can bypass the default policy for specific tools using `AutoApproveTools` and `AutoDenyTools`. These fields support Glob (e.g., `filesystem_read_*`) and Regex patterns (indicated by wrapping the pattern in slashes, e.g., `/filesystem_read_.+/`). Note that the tools are prefixed with the MCP server name followed by an underscore (e.g., `filesystem_read_file`, `websearch_search`). That's how the tools are presented to the agent. This behavior can be configured or disabled per downstream MCP server. Refer to the [Wiki](https://github.com/KubaZ2/agent-mcp/wiki/Configuration) for more details.
+You can bypass the default policy for specific tools using `AutoApproveTools` and `AutoDenyTools`. These fields support glob (e.g., `filesystem_read_*`) and regex patterns (indicated by wrapping the pattern in slashes, e.g., `/filesystem_read_.+/`). Note that the tools are prefixed with the MCP server name followed by an underscore (e.g., `filesystem_read_file`, `websearch_search`). That's how the tools are presented to the agent. This behavior can be configured or disabled per downstream MCP server. Refer to the [Wiki](https://github.com/KubaZ2/agent-mcp/wiki/Configuration) for more details.
 
 Elicitation prompts allow the user to choose from four options:
 - **Approve Once**: Approve this tool call for this agent, but ask again next time
