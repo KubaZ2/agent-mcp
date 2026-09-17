@@ -86,7 +86,7 @@ DefaultToolPolicy = Allow
 
 [Agents:coder]
 Description = Use this agent to read and modify local files.
-SystemPrompt = You are a principal software engineer. Complete the user's task step by step.
+SystemPrompt = You are a principal software engineer. Complete the task step by step.
 Provider = claude
 Model = claude-fable-5-1
 # Connects this agent to the filesystem downstream MCP
