@@ -28,7 +28,11 @@ WebApplicationBuilder CreateWebApplicationBuilder()
 {
     var builder = WebApplication.CreateEmptyBuilder(new() { Args = args });
 
-    builder.WebHost.UseKestrel();
+    builder.WebHost.UseKestrel((context, options) =>
+    {
+        options.Configure(context.Configuration.GetSection("Server"));
+    });
+
     builder.Services.AddRoutingCore();
 
     return builder;
