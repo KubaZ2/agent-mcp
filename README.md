@@ -80,7 +80,7 @@ For more configuration options and formats, please refer to the [Wiki](https://g
 
 ### 🛡️ Tool Permissions & Human-in-the-Loop
 
-By default, Agent MCP Server uses Elicitation to ask for user approval before executing any downstream tools. You can fully customize this behavior by setting a default policy (`Ask`, `Allow`, `Deny`) or by using glob or regex patterns to automatically approve safe actions, block specific tools entirely, or require permission for sensitive ones. Additionally, when prompted, you can choose **Approve Always** or **Deny Always** to temporarily configure a tool's permissions on the fly without needing to edit your configuration file.
+By default, Agent MCP Server uses Elicitation to ask for user approval before executing any downstream tools. You can fully customize this behavior by setting a default policy (`Ask`, `Allow`, `Deny`) or by using glob or regex patterns to automatically approve safe actions or block specific tools entirely. Additionally, when prompted, you can choose **Approve Always** or **Deny Always** to temporarily configure a tool's permissions on the fly without needing to edit your configuration file.
 
 Read how to configure tool filtering in the **[Agents configuration guide in the Wiki](https://github.com/KubaZ2/agent-mcp/wiki/Configuration#3-agents-agents)**.
 
