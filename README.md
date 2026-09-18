@@ -47,7 +47,7 @@ You can run the server via standard I/O (default) or HTTP. You must provide a co
 
 ## ⚙️ Configuration
 
-Agent MCP Server relies heavily on a configuration file to define LLM Providers, downstream MCP servers, and your Agents. Below is a comprehensive example using an `.ini` file format.
+Agent MCP Server can be configured in a variety of ways. Below there is an example using an `.ini` file format.
 
 ```ini
 # Configure your LLM providers here.
@@ -57,32 +57,15 @@ Agent MCP Server relies heavily on a configuration file to define LLM Providers,
 Type = anthropic
 ApiKey = sk-your-anthropic-api-key
 
-[Providers:my-local-ollama]
-Type = ollama
-
 # Configure the MCP servers your agents can use.
 
-# Example of a stdio-based downstream server
 [Mcp:filesystem]
 Command = npx
 Args:0 = -y
 Args:1 = @modelcontextprotocol/server-filesystem
 Args:2 = /home/myuser/projects/myproject
 
-# Example of an HTTP-based downstream server
-[Mcp:websearch]
-Endpoint = http://localhost:8080/mcp
-
 # Define specialized agents exposed to the client.
-
-[Agents:researcher]
-Description = Use this agent to search the web and summarize extensive information.
-Provider = my-local-ollama
-Model = gemma4:12b
-# Connects this agent to the websearch downstream MCP
-Mcp:0 = websearch
-# Automatically allow all tools for this agent
-DefaultToolPolicy = Allow
 
 [Agents:coder]
 Description = Use this agent to read and modify local files.
@@ -91,14 +74,9 @@ Provider = claude
 Model = claude-fable-5-1
 # Connects this agent to the filesystem downstream MCP
 Mcp:0 = filesystem
-# Auto-approve safe read operations (supports glob and regex)
-AutoApproveTools:0 = filesystem_read_*
-AutoApproveTools:1 = /^filesystem_list_/
-# Auto-deny tools we don't want the agent using at all
-AutoDenyTools:0 = filesystem_move_file
 ```
 
-For more configuration options, please refer to the [Wiki](https://github.com/KubaZ2/agent-mcp/wiki/Configuration).
+For more configuration options and formats, please refer to the [Wiki](https://github.com/KubaZ2/agent-mcp/wiki/Configuration).
 
 ### Policy & Tool Filtering
 
