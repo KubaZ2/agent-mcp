@@ -30,7 +30,7 @@ Because Agent MCP Server is compiled with Native AOT, there are **no prerequisit
 
 ### Installation
 
-Download the latest standalone binary for your operating system from [the releases page](https://github.com/KubaZ2/agent-mcp/releases/latest).
+Download the latest standalone binary for your operating system from [**the releases page**](https://github.com/KubaZ2/agent-mcp/releases/latest).
 
 ### Running the Server
 
@@ -76,13 +76,13 @@ Model = claude-fable-5-1
 Mcp:0 = filesystem
 ```
 
-For more configuration options and formats, please refer to the [Wiki](https://github.com/KubaZ2/agent-mcp/wiki/Configuration).
+For more configuration options and formats, please refer to the [**Wiki**](https://github.com/KubaZ2/agent-mcp/wiki/Configuration).
 
 ### 🛡️ Tool Permissions & Human-in-the-Loop
 
 By default, Agent MCP Server uses Elicitation to ask for user approval before executing any downstream tools. You can fully customize this behavior by setting a default policy (`Ask`, `Allow`, `Deny`) or by using glob or regex patterns to automatically approve safe actions or block specific tools entirely. Additionally, when prompted, you can choose **Approve Always** or **Deny Always** to temporarily configure a tool's permissions on the fly without needing to edit your configuration file.
 
-Read how to configure tool filtering in the **[Agents configuration guide in the Wiki](https://github.com/KubaZ2/agent-mcp/wiki/Configuration#3-agents-agents)**.
+Read how to configure tool filtering in the [**Wiki**](https://github.com/KubaZ2/agent-mcp/wiki/Configuration#3-agents-agents).
 
 ## 🛠️ Exposed MCP Tools
 
@@ -94,4 +94,4 @@ Once running, the server exposes a single tool to the connected client:
 
 ## 📜 License
 
-This project is released under the [MIT License](LICENSE)
+This project is released under the [**MIT License**](LICENSE).
