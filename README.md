@@ -39,7 +39,7 @@ You can run the server via standard I/O (default) or HTTP. You must provide a co
 ```bash
 # Run as stdio (default)
 agent-mcp --config config.ini
-# this is equivalent to './agent-mcp stdio --config config.ini'
+# this is equivalent to 'agent-mcp stdio --config config.ini'
 
 # Run as http server
 agent-mcp http --config config.ini
