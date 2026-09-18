@@ -93,7 +93,7 @@ Model = claude-fable-5-1
 Mcp:0 = filesystem
 # Auto-approve safe read operations (supports glob and regex)
 AutoApproveTools:0 = filesystem_read_*
-AutoApproveTools:1 = /filesystem_list_.+/
+AutoApproveTools:1 = /^filesystem_list_/
 # Auto-deny tools we don't want the agent using at all
 AutoDenyTools:0 = filesystem_move_file
 ```
@@ -108,7 +108,7 @@ The `DefaultToolPolicy` controls how the agent handles tool calls to downstream 
 * `Allow`: The agent executes the tool immediately.
 * `Deny`: The tool is hidden from the agent and cannot be called.
 
-You can bypass the default policy for specific tools using `AutoApproveTools` and `AutoDenyTools`. These fields support glob (e.g., `filesystem_read_*`) and regex patterns (indicated by wrapping the pattern in slashes, e.g., `/filesystem_read_.+/`). Note that the tools are prefixed with the MCP server name followed by an underscore (e.g., `filesystem_read_file`, `websearch_search`). That's how the tools are presented to the agent. This behavior can be configured or disabled per downstream MCP server. Refer to the [Wiki](https://github.com/KubaZ2/agent-mcp/wiki/Configuration) for more details.
+You can bypass the default policy for specific tools using `AutoApproveTools` and `AutoDenyTools`. These fields support glob (e.g., `filesystem_read_*`) and regex patterns (indicated by wrapping the pattern in slashes, e.g., `/^filesystem_read_/`). Note that the tools are prefixed with the MCP server name followed by an underscore (e.g., `filesystem_read_file`, `websearch_search`). That's how the tools are presented to the agent. This behavior can be configured or disabled per downstream MCP server. Refer to the [Wiki](https://github.com/KubaZ2/agent-mcp/wiki/Configuration) for more details.
 
 Elicitation prompts allow the user to choose from four options:
 - **Approve Once**: Approve this tool call for this agent, but ask again next time
