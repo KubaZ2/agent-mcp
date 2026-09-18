@@ -50,7 +50,7 @@ if (configuration.GetValue<string>("Config") is { } configPath)
     {
         ".json" => configuration.AddJsonFile(configPath, optional: false, reloadOnChange: true),
         ".ini" => configuration.AddIniFile(configPath, optional: false, reloadOnChange: true),
-        var extenion => throw new InvalidOperationException($"Unknown config file extension '{extenion}'"),
+        var extension => throw new InvalidOperationException($"Unknown config file extension '{extension}'"),
     };
 
 builder.Logging
