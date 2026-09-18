@@ -28,7 +28,11 @@ WebApplicationBuilder CreateWebApplicationBuilder()
 {
     var builder = WebApplication.CreateEmptyBuilder(new() { Args = args });
 
-    builder.WebHost.UseKestrel();
+    builder.WebHost.UseKestrel((context, options) =>
+    {
+        options.Configure(context.Configuration.GetSection("Server"));
+    });
+
     builder.Services.AddRoutingCore();
 
     return builder;
@@ -50,7 +54,7 @@ if (configuration.GetValue<string>("Config") is { } configPath)
     {
         ".json" => configuration.AddJsonFile(configPath, optional: false, reloadOnChange: true),
         ".ini" => configuration.AddIniFile(configPath, optional: false, reloadOnChange: true),
-        var extenion => throw new InvalidOperationException($"Unknown config file extension '{extenion}'"),
+        var extension => throw new InvalidOperationException($"Unknown config file extension '{extension}'"),
     };
 
 builder.Logging
