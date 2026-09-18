@@ -78,21 +78,11 @@ Mcp:0 = filesystem
 
 For more configuration options and formats, please refer to the [Wiki](https://github.com/KubaZ2/agent-mcp/wiki/Configuration).
 
-### Policy & Tool Filtering
+### 🛡️ Tool Permissions & Human-in-the-Loop
 
-The `DefaultToolPolicy` controls how the agent handles tool calls to downstream MCP servers:
+By default, Agent MCP Server uses Elicitation to ask for user approval before executing any downstream tools. You can fully customize this behavior by setting a default policy (`Ask`, `Allow`, `Deny`) or by using glob or regex patterns to automatically approve safe actions, block specific tools entirely, or require permission for sensitive ones. Additionally, when prompted, you can choose **Approve Always** or **Deny Always** to temporarily configure a tool's permissions on the fly without needing to edit your configuration file.
 
-* `Ask`: Default, the server uses MCP Elicitation to prompt the user in their client GUI.
-* `Allow`: The agent executes the tool immediately.
-* `Deny`: The tool is hidden from the agent and cannot be called.
-
-You can bypass the default policy for specific tools using `AutoApproveTools` and `AutoDenyTools`. These fields support glob (e.g., `filesystem_read_*`) and regex patterns (indicated by wrapping the pattern in slashes, e.g., `/^filesystem_read_/`). Note that the tools are prefixed with the MCP server name followed by an underscore (e.g., `filesystem_read_file`, `websearch_search`). That's how the tools are presented to the agent. This behavior can be configured or disabled per downstream MCP server. Refer to the [Wiki](https://github.com/KubaZ2/agent-mcp/wiki/Configuration) for more details.
-
-Elicitation prompts allow the user to choose from four options:
-- **Approve Once**: Approve this tool call for this agent, but ask again next time
-- **Approve Always**: Approve this tool call for this agent and all future calls
-- **Deny Once**: Deny this tool call for this agent, but ask again next time
-- **Deny Always**: Deny this tool call for this agent and all future calls
+Read how to configure tool filtering in the **[Agents configuration guide in the Wiki](https://github.com/KubaZ2/agent-mcp/wiki/Configuration#3-agents-agents)**.
 
 ## 🛠️ Exposed MCP Tools
 
