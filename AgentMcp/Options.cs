@@ -85,8 +85,6 @@ internal enum ToolApprovalPolicy : byte
 
 internal interface IMcpServerConfiguration
 {
-    public string? Name { get; set; }
-
     public string? ToolNameFormat { get; set; }
 }
 
@@ -94,8 +92,6 @@ internal partial class StdioMcpServerConfiguration : IMcpServerConfiguration
 {
     [OptionsValidator]
     internal partial class Validator : IValidateOptions<StdioMcpServerConfiguration>;
-
-    public string? Name { get; set; }
 
     public string? ToolNameFormat { get; set; }
 
@@ -117,8 +113,6 @@ internal partial class HttpMcpServerConfiguration : IMcpServerConfiguration
 {
     [OptionsValidator]
     internal partial class Validator : IValidateOptions<HttpMcpServerConfiguration>;
-
-    public string? Name { get; set; }
 
     public string? ToolNameFormat { get; set; }
 
