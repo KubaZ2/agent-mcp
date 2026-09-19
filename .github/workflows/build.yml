@@ -62,7 +62,7 @@ jobs:
 
       - name: Install Nix
         if: ${{ matrix.use-nix }}
-        uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342 # v31.11.0
+        uses: cachix/install-nix-action@13d8dd58da0234aa297dedd986986ccb8e7f3e24 # v31.11.1
 
       - name: Setup dev environment
         if: ${{ matrix.use-nix }}
@@ -70,7 +70,7 @@ jobs:
 
       - name: Setup .NET
         if: ${{ !matrix.use-nix }}
-        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
         with:
           global-json-file: global.json
 
