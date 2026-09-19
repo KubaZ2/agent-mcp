@@ -33,7 +33,8 @@
       "matchManagers": [ "nuget" ],
       "matchPackageNames": [ "dotnet-sdk" ],
       "groupName": "dotnet-sdk",
-      "dependencyDashboardApproval": true
+      "dependencyDashboardApproval": true,
+      "versioning": "semver"
     },
     {
       "description": "Nixpkgs update",
