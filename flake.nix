@@ -36,7 +36,6 @@
         } {
           packages = [
             dotnet
-            pkgs.nodejs_26
           ];
 
           buildInputs = [
