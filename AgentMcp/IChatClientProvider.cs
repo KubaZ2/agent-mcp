@@ -63,7 +63,10 @@ internal class DefaultChatClientProvider(ILogger<DefaultChatClientProvider> logg
         if (provider.Endpoint is { } endpoint)
             clientOptions.Endpoint = new(endpoint);
 
-        ChatClient rawClient = new(agent.Model, new ApiKeyCredential(provider.ApiKey ?? "-"), clientOptions);
+        ChatClient rawClient = new(agent.Model,
+                                   new ApiKeyCredential(provider.ApiKey ?? "-"),
+                                   clientOptions);
+
         return rawClient.AsIChatClient();
     }
 
@@ -78,17 +81,36 @@ internal class DefaultChatClientProvider(ILogger<DefaultChatClientProvider> logg
                 Type = "ApiKey",
                 Location = "Header",
                 Name = "x-api-key",
-                Value = apiKey
+                Value = apiKey,
             };
             authorizations = [authorization];
         }
 
-        return new(CreateHttpClient(provider.TimeoutSeconds), provider.Endpoint is { } endpoint ? new(endpoint) : null, authorizations: authorizations);
+        return new(CreateHttpClient(provider.TimeoutSeconds),
+                   provider.Endpoint is { } endpoint ? new(endpoint) : null,
+                   authorizations: authorizations);
     }
 
     private static IChatClient CreateOllamaClient(AgentConfiguration agent, OllamaProviderConfiguration provider)
     {
-        OllamaClient client = new(CreateHttpClient(provider.TimeoutSeconds), provider.Endpoint is { } endpoint ? new(endpoint) : null);
+        List<Ollama.EndPointAuthorization>? authorizations = null;
+
+        if (provider.ApiKey is { } apiKey)
+        {
+            Ollama.EndPointAuthorization authorization = new()
+            {
+                Type = "ApiKey",
+                Location = "Header",
+                SchemeId = "Bearer",
+                Name = "Authorization",
+                Value = apiKey,
+            };
+            authorizations = [authorization];
+        }
+
+        OllamaClient client = new(CreateHttpClient(provider.TimeoutSeconds),
+                                  provider.Endpoint is { } endpoint ? new(endpoint) : null,
+                                  authorizations);
 
         return ((IChatClient)client).AsBuilder().ConfigureOptions(o =>
         {

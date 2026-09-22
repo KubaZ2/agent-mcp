@@ -44,6 +44,8 @@ internal class AnthropicProviderConfiguration : IProviderConfiguration
 
 internal class OllamaProviderConfiguration : IProviderConfiguration
 {
+    public string? ApiKey { get; set; }
+
     public string? Endpoint { get; set; }
 
     public double? TimeoutSeconds { get; set; }
