@@ -7,7 +7,7 @@ internal interface IMcpClientProvider
     public ValueTask<McpClient?> CreateAsync(string key, IMcpServerConfiguration configuration, McpClientOptions options);
 }
 
-internal class DefaultMcpClientProvider : IMcpClientProvider
+internal class DefaultMcpClientProvider(ILogger<DefaultMcpClientProvider> logger) : IMcpClientProvider
 {
     public async ValueTask<McpClient?> CreateAsync(string key, IMcpServerConfiguration configuration, McpClientOptions options)
     {
@@ -24,7 +24,21 @@ internal class DefaultMcpClientProvider : IMcpClientProvider
         }
         catch (Exception ex)
         {
-            throw new InvalidOperationException($"Failed to connect to '{key}' MCP server.", ex);
+            switch (configuration.FailurePolicy.GetValueOrDefault(McpServerFailurePolicy.Skip))
+            {
+                case McpServerFailurePolicy.Skip:
+                    logger.LogWarning(ex, "Failed to connect to '{Key}' MCP server. Skipping...", key);
+
+                    return null;
+
+                case McpServerFailurePolicy.Fail:
+                    logger.LogError(ex, "Failed to connect to '{Key}' MCP server. Failing...", key);
+
+                    throw new InvalidOperationException($"Failed to connect to '{key}' MCP server.", ex);
+
+                default:
+                    throw new InvalidOperationException($"Unknown '{nameof(McpServerFailurePolicy)}' value '{configuration.FailurePolicy}'.", ex);
+            }
         }
     }
 
