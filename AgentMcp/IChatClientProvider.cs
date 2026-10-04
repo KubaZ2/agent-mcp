@@ -99,10 +99,9 @@ internal class DefaultChatClientProvider(ILogger<DefaultChatClientProvider> logg
         {
             Ollama.EndPointAuthorization authorization = new()
             {
-                Type = "ApiKey",
+                Type = "Http",
                 Location = "Header",
                 SchemeId = "Bearer",
-                Name = "Authorization",
                 Value = apiKey,
             };
             authorizations = [authorization];
