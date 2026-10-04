@@ -605,7 +605,7 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
 
         if (mcpClient is null)
         {
-            logger.LogWarning("MCP client for for MCP server '{ServerName}' could not be created for agent '{AgentName}'", mcpServerKey, agentName);
+            logger.LogWarning("MCP client for MCP server '{ServerName}' could not be created for agent '{AgentName}'", mcpServerKey, agentName);
 
             return [];
         }

@@ -88,6 +88,8 @@ internal enum ToolApprovalPolicy : byte
 internal interface IMcpServerConfiguration
 {
     public string? ToolNameFormat { get; set; }
+
+    public McpServerFailurePolicy? FailurePolicy { get; set; }
 }
 
 internal partial class StdioMcpServerConfiguration : IMcpServerConfiguration
@@ -96,6 +98,8 @@ internal partial class StdioMcpServerConfiguration : IMcpServerConfiguration
     internal partial class Validator : IValidateOptions<StdioMcpServerConfiguration>;
 
     public string? ToolNameFormat { get; set; }
+
+    public McpServerFailurePolicy? FailurePolicy { get; set; }
 
     [Required]
     public string Command { get; set; } = null!;
@@ -118,6 +122,8 @@ internal partial class HttpMcpServerConfiguration : IMcpServerConfiguration
 
     public string? ToolNameFormat { get; set; }
 
+    public McpServerFailurePolicy? FailurePolicy { get; set; }
+
     [Required]
     public string Endpoint { get; set; } = null!;
 
@@ -134,6 +140,12 @@ internal partial class HttpMcpServerConfiguration : IMcpServerConfiguration
     public bool? OwnsSession { get; set; }
 
     public HttpMcpTransportMode? Mode { get; set; }
+}
+
+internal enum McpServerFailurePolicy : byte
+{
+    Skip,
+    Fail,
 }
 
 internal enum HttpMcpTransportMode
