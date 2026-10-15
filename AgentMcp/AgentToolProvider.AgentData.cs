@@ -26,20 +26,29 @@ internal partial class AgentToolProvider
             public TaskCompletionSource<PollTaskResult?> CompletionSource => completionSource;
         }
 
-        private byte _lock;
+        private static State CreateInitialState() => new([], new(TaskCreationOptions.RunContinuationsAsynchronously));
 
-        private State _state = new([], new(TaskCreationOptions.RunContinuationsAsynchronously));
+        private State _state = CreateInitialState();
 
         public SemaphoreSlim ToolInvocationFilterSemaphore { get; } = new(1, 1);
 
-        public bool TryEnter()
-        {
-            return Interlocked.CompareExchange(ref _lock, 1, 0) is 0;
-        }
+        public SemaphoreSlim InvocationSemaphore { get; } = new(1, 1);
 
-        public void Exit()
+        public void ClearToolTasks()
         {
-            Interlocked.Exchange(ref _lock, 0);
+            var state = Volatile.Read(ref _state);
+
+            while (true)
+            {
+                var newState = CreateInitialState();
+
+                var oldState = Interlocked.CompareExchange(ref _state, newState, state);
+
+                if (oldState == state)
+                    break;
+
+                state = oldState;
+            }
         }
 
         public void AddToolTask(Task<PollTaskResult> task)
