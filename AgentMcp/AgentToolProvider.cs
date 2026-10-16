@@ -250,12 +250,14 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
                 return CreateSimpleResult($"Agent '{agent}' is already running. Please wait for it to finish.", isError: true);
             }
 
+            using var cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             try
             {
-                return await AgentAsyncCore(agentData, prompt, server, cancellationToken);
+                return await AgentAsyncCore(agentData, prompt, server, cancellationTokenSource.Token);
             }
             finally
             {
+                await cancellationTokenSource.CancelAsync();
                 await agentData.CleanUpAsync();
                 agentData.Exit();
             }
@@ -273,7 +275,7 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
         return JsonSerializer.SerializeToElement(result, McpJsonUtilities.DefaultOptions.GetTypeInfo<T>());
     }
 
-    private async ValueTask<object?> HandleFunctionInvocationAsyncCore(FunctionInvocationContext context, AgentData agent, McpServer server, CancellationToken cancellationToken)
+    private async ValueTask<object?> HandleFunctionInvocationAsyncCore(FunctionInvocationContext context, AgentData agent, McpServer server, CancellationToken invocationCancellationToken, CancellationToken toolCancellationToken)
     {
         var function = context.Function;
 
@@ -281,12 +283,12 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
 
         var semaphore = agent.ToolInvocationFilterSemaphore;
 
-        await semaphore.WaitAsync(cancellationToken);
+        await semaphore.WaitAsync(invocationCancellationToken);
         try
         {
-            var filterResult = await agent.ToolInvocationFilter.FilterAsync(function, cancellationToken);
+            var filterResult = await agent.ToolInvocationFilter.FilterAsync(function, invocationCancellationToken);
 
-            if (await HandleFilterResultAsync(context, agent, server, function, filterResult, cancellationToken) is { } response)
+            if (await HandleFilterResultAsync(context, agent, server, function, filterResult, invocationCancellationToken) is { } response)
                 return response;
         }
         finally
@@ -298,7 +300,7 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
         {
             logger.LogInformation("Calling function {FunctionName} as a task.", function.Name);
 
-            var callResult = await wrapper.CallAsTaskAsync(context.Arguments, cancellationToken: cancellationToken);
+            var callResult = await wrapper.CallAsTaskAsync(context.Arguments, cancellationToken: invocationCancellationToken);
 
             if (!callResult.IsTask)
             {
@@ -312,25 +314,25 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
 
             logger.LogInformation("Function {FunctionName} started as a task with ID: {TaskId}. Polling for completion.", function.Name, taskCreated.TaskId);
 
-            agent.AddToolTask(PollTaskAsync(taskCreated, context.CallContent.CallId, wrapper, server, cancellationToken));
+            agent.AddToolTask(PollTaskAsync(taskCreated, context.CallContent.CallId, wrapper, server, toolCancellationToken));
 
             return MarshalMcpResult(taskCreated);
         }
 
         logger.LogInformation("Calling function {FunctionName} directly.", function.Name);
 
-        return await function.InvokeAsync(context.Arguments, cancellationToken);
+        return await function.InvokeAsync(context.Arguments, invocationCancellationToken);
     }
 
-    private async ValueTask<object?> HandleFunctionInvocationAsync(FunctionInvocationContext context, AgentData agent, McpServer server, CancellationToken invokerCancellationToken, CancellationToken cancellationToken)
+    private async ValueTask<object?> HandleFunctionInvocationAsync(FunctionInvocationContext context, AgentData agent, McpServer server, CancellationToken invokerCancellationToken, CancellationToken toolCancellationToken)
     {
         logger.LogDebug("Agent {Agent} is invoking {FunctionCount} function(s) in parallel", agent.Name, context.FunctionCount);
 
         try
         {
-            using var cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(invokerCancellationToken, cancellationToken);
+            using var invocationCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(invokerCancellationToken, toolCancellationToken);
 
-            return await HandleFunctionInvocationAsyncCore(context, agent, server, cancellationTokenSource.Token);
+            return await HandleFunctionInvocationAsyncCore(context, agent, server, invocationCancellationTokenSource.Token, toolCancellationToken);
         }
         catch (Exception ex)
         {
