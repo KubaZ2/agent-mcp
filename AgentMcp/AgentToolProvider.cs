@@ -219,7 +219,7 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
                     if (logger.IsEnabled(LogLevel.Warning))
                         logger.LogWarning("Agent {Agent} received cancelled task result: {Result}", agentName, JsonSerializer.Serialize(cancelledTaskResult, McpTasksJsonContext.Default.CancelledTaskResult));
 
-                    return [new TextContent(string.Format(null, toolCallTaskFinishPromptFormat, callId, taskResult.ResultType))];
+                    return [new TextContent(string.Format(null, toolCallTaskFinishPromptFormat, callId, cancelledTaskResult.ResultType))];
                 }
             default:
                 {
