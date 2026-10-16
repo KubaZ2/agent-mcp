@@ -132,7 +132,7 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
             ? [userMessage]
             : [new(ChatRole.System, systemPrompt), userMessage];
 
-        chatClient.FunctionInvoker = (context, cancellationToken) => HandleFunctionInvocationAsync(context, agent, server, cancellationToken);
+        chatClient.FunctionInvoker = (context, invokerCancellationToken) => HandleFunctionInvocationAsync(context, agent, server, invokerCancellationToken, cancellationToken);
 
         elicitationHandler.Value = (request, cancellationToken) =>
         {
@@ -243,9 +243,7 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
                 return CreateSimpleResult($"Agent '{agent}' does not exist.", isError: true);
             }
 
-            var semaphore = agentData.InvocationSemaphore;
-
-            if (!semaphore.Wait(0, cancellationToken))
+            if (!agentData.TryEnter())
             {
                 logger.LogWarning("Agent {Agent} is already running. Please wait for it to finish.", agentData.Name);
 
@@ -258,8 +256,8 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
             }
             finally
             {
-                agentData.ClearToolTasks();
-                semaphore.Release();
+                await agentData.CleanUpAsync();
+                agentData.Exit();
             }
         }
         catch (Exception ex)
@@ -324,13 +322,15 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
         return await function.InvokeAsync(context.Arguments, cancellationToken);
     }
 
-    private async ValueTask<object?> HandleFunctionInvocationAsync(FunctionInvocationContext context, AgentData agent, McpServer server, CancellationToken cancellationToken)
+    private async ValueTask<object?> HandleFunctionInvocationAsync(FunctionInvocationContext context, AgentData agent, McpServer server, CancellationToken invokerCancellationToken, CancellationToken cancellationToken)
     {
         logger.LogDebug("Agent {Agent} is invoking {FunctionCount} function(s) in parallel", agent.Name, context.FunctionCount);
 
         try
         {
-            return await HandleFunctionInvocationAsyncCore(context, agent, server, cancellationToken);
+            using var cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(invokerCancellationToken, cancellationToken);
+
+            return await HandleFunctionInvocationAsyncCore(context, agent, server, cancellationTokenSource.Token);
         }
         catch (Exception ex)
         {
