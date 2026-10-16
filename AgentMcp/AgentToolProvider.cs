@@ -424,7 +424,7 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
 
     private async Task<AskResult> AskAsync(FunctionInvocationContext context, AgentData agent, McpServer server, AIFunction function, CancellationToken cancellationToken)
     {
-        if (!server.IsMrtrSupported && server.ClientCapabilities is not { Elicitation: { Form: { } } })
+        if (!server.IsMrtrSupported && server.ClientCapabilities is not { Elicitation.Form: { } })
             return AskResult.NotSupported;
 
         StringBuilder messageBuilder = new();
@@ -724,7 +724,9 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
 
         StrongBox<ElicitationHandler> elicitationHandlerBox = new();
 
+#pragma warning disable IDE0039 // Use local function
         ElicitationHandler elicitationHandler = (request, cancellationToken) => elicitationHandlerBox.Value!(request, cancellationToken);
+#pragma warning restore IDE0039 // Use local function
 
         IReadOnlyList<AITool> tools = agent.Mcp is { } mcpKeys
             ? [.. (await Task.WhenAll(mcpKeys.Select(k => GetMcpToolsAsync(k, elicitationHandler, name)))).SelectMany(j => j)]
