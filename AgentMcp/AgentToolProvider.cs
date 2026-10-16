@@ -188,13 +188,13 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
 
                     var toolCallResult = JsonSerializer.Deserialize(completedTaskResult.Result, McpJsonUtilities.DefaultOptions.GetTypeInfo<CallToolResult>())!;
 
+                    var prompt = string.Format(null,
+                                               toolCallTaskFinishPromptFormat,
+                                               callId,
+                                               toolCallResult.IsError.GetValueOrDefault() ? "complete_with_error" : "complete");
+
                     return [
-                        new TextContent(string.Format(null,
-                                                      toolCallTaskFinishPromptFormat,
-                                                      callId,
-                                                      toolCallResult.IsError.GetValueOrDefault()
-                                                          ? "complete_with_error"
-                                                          : "complete")),
+                        new TextContent(prompt),
                         .. toolCallResult.Content.ToAIContents()
                     ];
                 }
@@ -207,7 +207,7 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
 
                     var error = failedTaskResult.Error;
 
-                    return error.ValueKind is JsonValueKind.Undefined
+                    return error.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null
                         ? [new TextContent(prompt)]
                         : [
                             new TextContent(prompt),
@@ -223,9 +223,11 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
                 }
             default:
                 {
-                    logger.LogWarning("Agent {Agent} received unexpected task result type: {ResultType}", agentName, taskResult.ResultType);
+                    var resultType = taskResult.ResultType;
 
-                    return [new TextContent(string.Format(null, toolCallTaskFinishPromptFormat, callId, taskResult.ResultType))];
+                    logger.LogWarning("Agent {Agent} received unexpected task result type: {ResultType}", agentName, resultType);
+
+                    return [new TextContent(string.Format(null, toolCallTaskFinishPromptFormat, callId, resultType))];
                 }
         }
     }
