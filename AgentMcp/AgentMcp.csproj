@@ -12,7 +12,7 @@
     <EnableConfigurationBindingGenerator>true</EnableConfigurationBindingGenerator>
     <OptimizationPreference>Size</OptimizationPreference>
     <IlcFoldIdenticalMethodBodies>true</IlcFoldIdenticalMethodBodies>
-    <NoWarn>$(NoWarn);SYSLIB1100;SYSLIB1101</NoWarn>
+    <NoWarn>$(NoWarn);SYSLIB1100;SYSLIB1101;CA1873</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

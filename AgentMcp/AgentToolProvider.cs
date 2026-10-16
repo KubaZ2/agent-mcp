@@ -108,7 +108,7 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
         }, cancellationToken);
     }
 
-    private CallToolResult CreateSimpleResult(string message, bool isError)
+    private static CallToolResult CreateSimpleResult(string message, bool isError)
     {
         return new()
         {
@@ -122,7 +122,7 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
         };
     }
 
-    private async Task<CallToolResult> AgentAsyncCore(AgentData agent, string prompt, McpServer server)
+    private async Task<CallToolResult> AgentAsyncCore(AgentData agent, string prompt, McpServer server, CancellationToken cancellationToken)
     {
         var (name, chatClient, tools, systemPrompt, toolCallTaskFinishPromptFormat, elicitationHandler, toolInvocationFilter) = agent;
 
@@ -132,7 +132,7 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
             ? [userMessage]
             : [new(ChatRole.System, systemPrompt), userMessage];
 
-        chatClient.FunctionInvoker = (context, cancellationToken) => HandleFunctionInvocationAsync(context, agent, server, cancellationToken);
+        chatClient.FunctionInvoker = (context, invokerCancellationToken) => HandleFunctionInvocationAsync(context, agent, server, invokerCancellationToken, cancellationToken);
 
         elicitationHandler.Value = (request, cancellationToken) =>
         {
@@ -146,7 +146,7 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
             return HandleElicitationAsync(request, server, cancellationToken);
         };
 
-        var response = await GetResponseAsync(chatClient, messages, tools, toolInvocationFilter);
+        var response = await GetResponseAsync(chatClient, messages, tools, toolInvocationFilter, cancellationToken);
 
         if (logger.IsEnabled(LogLevel.Debug))
             logger.LogDebug("Agent {Agent} response: {Response}", name, JsonSerializer.Serialize(response, AIJsonUtilities.DefaultOptions.GetTypeInfo<ChatResponse>()));
@@ -155,31 +155,14 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
 
         while (true)
         {
-            var taskResult = await agent.WaitForToolTaskCompletionAsync();
-
-            if (taskResult is null)
+            if (await agent.WaitForToolTaskCompletionAsync() is not { TaskResult: var taskResult, CallId: var callId })
                 break;
 
-            if (taskResult.TaskResult is not CompletedTaskResult completedTask)
-            {
-                if (logger.IsEnabled(LogLevel.Warning))
-                    logger.LogWarning("Agent {Agent} received non-completed task result: {Result}", name, JsonSerializer.Serialize(taskResult, McpTasksJsonContext.Default.GetTaskResult));
+            var resultContents = HandleResult(name, toolCallTaskFinishPromptFormat, taskResult, callId);
 
-                continue;
-            }
+            messages.Add(new(ChatRole.User, resultContents));
 
-            if (logger.IsEnabled(LogLevel.Information))
-                logger.LogInformation("Agent {Agent} received completed task result: {Result}", name, JsonSerializer.Serialize(completedTask, McpTasksJsonContext.Default.CompletedTaskResult));
-
-            var toolResult = JsonSerializer.Deserialize(completedTask.Result, McpJsonUtilities.DefaultOptions.GetTypeInfo<CallToolResult>())!;
-
-            messages.Add(new(ChatRole.Tool,
-            [
-                new TextContent(string.Format(null, toolCallTaskFinishPromptFormat, taskResult.CallId)),
-                .. toolResult.Content.ToAIContents()
-            ]));
-
-            response = await GetResponseAsync(chatClient, messages, tools, toolInvocationFilter);
+            response = await GetResponseAsync(chatClient, messages, tools, toolInvocationFilter, cancellationToken);
 
             if (logger.IsEnabled(LogLevel.Debug))
                 logger.LogDebug("Agent {Agent} response: {Response}", name, JsonSerializer.Serialize(response, AIJsonUtilities.DefaultOptions.GetTypeInfo<ChatResponse>()));
@@ -194,7 +177,62 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
         return CreateSimpleResult(result, isError: false);
     }
 
-    private async Task<CallToolResult> AgentAsync([Description("Agent")] string agent, [Description("Prompt")] string prompt, McpServer server)
+    private IList<AIContent> HandleResult(string agentName, CompositeFormat toolCallTaskFinishPromptFormat, GetTaskResult taskResult, string callId)
+    {
+        switch (taskResult)
+        {
+            case CompletedTaskResult completedTaskResult:
+                {
+                    if (logger.IsEnabled(LogLevel.Information))
+                        logger.LogInformation("Agent {Agent} received completed task result: {Result}", agentName, JsonSerializer.Serialize(completedTaskResult, McpTasksJsonContext.Default.CompletedTaskResult));
+
+                    var toolCallResult = JsonSerializer.Deserialize(completedTaskResult.Result, McpJsonUtilities.DefaultOptions.GetTypeInfo<CallToolResult>())!;
+
+                    var prompt = string.Format(null,
+                                               toolCallTaskFinishPromptFormat,
+                                               callId,
+                                               toolCallResult.IsError.GetValueOrDefault() ? "complete_with_error" : "complete");
+
+                    return [
+                        new TextContent(prompt),
+                        .. toolCallResult.Content.ToAIContents()
+                    ];
+                }
+            case FailedTaskResult failedTaskResult:
+                {
+                    if (logger.IsEnabled(LogLevel.Warning))
+                        logger.LogWarning("Agent {Agent} received failed task result: {Result}", agentName, JsonSerializer.Serialize(failedTaskResult, McpTasksJsonContext.Default.FailedTaskResult));
+
+                    var prompt = string.Format(null, toolCallTaskFinishPromptFormat, callId, failedTaskResult.ResultType);
+
+                    var error = failedTaskResult.Error;
+
+                    return error.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null
+                        ? [new TextContent(prompt)]
+                        : [
+                            new TextContent(prompt),
+                            new TextContent(error.GetRawText()),
+                        ];
+                }
+            case CancelledTaskResult cancelledTaskResult:
+                {
+                    if (logger.IsEnabled(LogLevel.Warning))
+                        logger.LogWarning("Agent {Agent} received cancelled task result: {Result}", agentName, JsonSerializer.Serialize(cancelledTaskResult, McpTasksJsonContext.Default.CancelledTaskResult));
+
+                    return [new TextContent(string.Format(null, toolCallTaskFinishPromptFormat, callId, cancelledTaskResult.ResultType))];
+                }
+            default:
+                {
+                    var resultType = taskResult.ResultType;
+
+                    logger.LogWarning("Agent {Agent} received unexpected task result type: {ResultType}", agentName, resultType);
+
+                    return [new TextContent(string.Format(null, toolCallTaskFinishPromptFormat, callId, resultType))];
+                }
+        }
+    }
+
+    private async Task<CallToolResult> AgentAsync([Description("Agent")] string agent, [Description("Prompt")] string prompt, McpServer server, CancellationToken cancellationToken)
     {
         logger.LogInformation("Running agent {Agent} with prompt: {Prompt}", agent, prompt);
 
@@ -214,12 +252,15 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
                 return CreateSimpleResult($"Agent '{agent}' is already running. Please wait for it to finish.", isError: true);
             }
 
+            using var cancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             try
             {
-                return await AgentAsyncCore(agentData, prompt, server);
+                return await AgentAsyncCore(agentData, prompt, server, cancellationTokenSource.Token);
             }
             finally
             {
+                await cancellationTokenSource.CancelAsync();
+                await agentData.CleanUpAsync();
                 agentData.Exit();
             }
         }
@@ -236,7 +277,7 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
         return JsonSerializer.SerializeToElement(result, McpJsonUtilities.DefaultOptions.GetTypeInfo<T>());
     }
 
-    private async ValueTask<object?> HandleFunctionInvocationAsyncCore(FunctionInvocationContext context, AgentData agent, McpServer server, CancellationToken cancellationToken)
+    private async ValueTask<object?> HandleFunctionInvocationAsyncCore(FunctionInvocationContext context, AgentData agent, McpServer server, CancellationToken invocationCancellationToken, CancellationToken toolCancellationToken)
     {
         var function = context.Function;
 
@@ -244,12 +285,12 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
 
         var semaphore = agent.ToolInvocationFilterSemaphore;
 
-        await semaphore.WaitAsync(cancellationToken);
+        await semaphore.WaitAsync(invocationCancellationToken);
         try
         {
-            var filterResult = await agent.ToolInvocationFilter.FilterAsync(function, cancellationToken);
+            var filterResult = await agent.ToolInvocationFilter.FilterAsync(function, invocationCancellationToken);
 
-            if (await HandleFilterResultAsync(context, agent, server, function, filterResult, cancellationToken) is { } response)
+            if (await HandleFilterResultAsync(context, agent, server, function, filterResult, invocationCancellationToken) is { } response)
                 return response;
         }
         finally
@@ -261,7 +302,7 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
         {
             logger.LogInformation("Calling function {FunctionName} as a task.", function.Name);
 
-            var callResult = await wrapper.CallAsTaskAsync(context.Arguments, cancellationToken: cancellationToken);
+            var callResult = await wrapper.CallAsTaskAsync(context.Arguments, cancellationToken: invocationCancellationToken);
 
             if (!callResult.IsTask)
             {
@@ -275,23 +316,25 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
 
             logger.LogInformation("Function {FunctionName} started as a task with ID: {TaskId}. Polling for completion.", function.Name, taskCreated.TaskId);
 
-            agent.AddToolTask(PollTaskAsync(taskCreated, context.CallContent.CallId, wrapper, server, cancellationToken));
+            agent.AddToolTask(PollTaskAsync(taskCreated, context.CallContent.CallId, wrapper, server, toolCancellationToken));
 
             return MarshalMcpResult(taskCreated);
         }
 
         logger.LogInformation("Calling function {FunctionName} directly.", function.Name);
 
-        return await function.InvokeAsync(context.Arguments, cancellationToken);
+        return await function.InvokeAsync(context.Arguments, invocationCancellationToken);
     }
 
-    private async ValueTask<object?> HandleFunctionInvocationAsync(FunctionInvocationContext context, AgentData agent, McpServer server, CancellationToken cancellationToken)
+    private async ValueTask<object?> HandleFunctionInvocationAsync(FunctionInvocationContext context, AgentData agent, McpServer server, CancellationToken invokerCancellationToken, CancellationToken toolCancellationToken)
     {
         logger.LogDebug("Agent {Agent} is invoking {FunctionCount} function(s) in parallel", agent.Name, context.FunctionCount);
 
         try
         {
-            return await HandleFunctionInvocationAsyncCore(context, agent, server, cancellationToken);
+            using var invocationCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(invokerCancellationToken, toolCancellationToken);
+
+            return await HandleFunctionInvocationAsyncCore(context, agent, server, invocationCancellationTokenSource.Token, toolCancellationToken);
         }
         catch (Exception ex)
         {
@@ -381,7 +424,7 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
 
     private async Task<AskResult> AskAsync(FunctionInvocationContext context, AgentData agent, McpServer server, AIFunction function, CancellationToken cancellationToken)
     {
-        if (!server.IsMrtrSupported && server.ClientCapabilities is not { Elicitation: { Form: { } } })
+        if (!server.IsMrtrSupported && server.ClientCapabilities is not { Elicitation.Form: { } })
             return AskResult.NotSupported;
 
         StringBuilder messageBuilder = new();
@@ -476,31 +519,35 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
 
             pollIntervalMs = getTaskResult.PollIntervalMs.GetValueOrDefault(1000);
 
-            switch (getTaskResult.Status)
+            switch (getTaskResult)
             {
-                case McpTaskStatus.Working:
+                case WorkingTaskResult:
                     {
                         logger.LogDebug("Task {TaskId} is still working.", taskCreated.TaskId);
 
                         continue;
                     }
-                case McpTaskStatus.Completed:
+                case CompletedTaskResult:
                     {
-                        logger.LogInformation("Task {TaskId} completed successfully.", taskCreated.TaskId);
+                        logger.LogInformation("Task {TaskId} completed.", taskCreated.TaskId);
 
                         return new(callId, getTaskResult);
                     }
-                case McpTaskStatus.Failed:
+                case FailedTaskResult:
                     {
                         logger.LogInformation("Task {TaskId} failed.", taskCreated.TaskId);
 
                         return new(callId, getTaskResult);
                     }
-                case McpTaskStatus.InputRequired:
+                case CancelledTaskResult:
+                    {
+                        logger.LogInformation("Task {TaskId} was cancelled.", taskCreated.TaskId);
+
+                        return new(callId, getTaskResult);
+                    }
+                case InputRequiredTaskResult inputRequiredResult:
                     {
                         logger.LogInformation("Task {TaskId} requires input.", taskCreated.TaskId);
-
-                        var inputRequiredResult = (InputRequiredTaskResult)getTaskResult;
 
                         Dictionary<string, InputResponse>? inputResponses;
 
@@ -536,6 +583,12 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
                         }, cancellationToken);
 
                         break;
+                    }
+                default:
+                    {
+                        logger.LogWarning("Task {TaskId} entered an unexpected state: {ResultType}. Treating as completed.", taskCreated.TaskId, getTaskResult.ResultType);
+
+                        return new(callId, getTaskResult);
                     }
             }
         }
@@ -633,7 +686,7 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
         return result;
     }
 
-    private static CompositeFormat DefaultToolCallTaskFinishPromptFormat => field ??= CompositeFormat.Parse("Background task for tool call {0} has finished. Result:\n");
+    private static CompositeFormat DefaultToolCallTaskFinishPromptFormat => field ??= CompositeFormat.Parse("Background task for tool call '{0}' has finished with status '{1}'.");
 
     private CompositeFormat GetToolCallTaskFinishPromptFormat(string? toolCallTaskFinishPromptFormat, string agentName)
     {
@@ -671,7 +724,9 @@ internal partial class AgentToolProvider(IOptionsMonitor<Options> options, ILogg
 
         StrongBox<ElicitationHandler> elicitationHandlerBox = new();
 
+#pragma warning disable IDE0039 // Use local function
         ElicitationHandler elicitationHandler = (request, cancellationToken) => elicitationHandlerBox.Value!(request, cancellationToken);
+#pragma warning restore IDE0039 // Use local function
 
         IReadOnlyList<AITool> tools = agent.Mcp is { } mcpKeys
             ? [.. (await Task.WhenAll(mcpKeys.Select(k => GetMcpToolsAsync(k, elicitationHandler, name)))).SelectMany(j => j)]

@@ -28,7 +28,9 @@ internal partial class AgentToolProvider
 
         private byte _lock;
 
-        private State _state = new([], new(TaskCreationOptions.RunContinuationsAsynchronously));
+        private static State CreateInitialState() => new([], new(TaskCreationOptions.RunContinuationsAsynchronously));
+
+        private State _state = CreateInitialState();
 
         public SemaphoreSlim ToolInvocationFilterSemaphore { get; } = new(1, 1);
 
@@ -40,6 +42,19 @@ internal partial class AgentToolProvider
         public void Exit()
         {
             Interlocked.Exchange(ref _lock, 0);
+        }
+
+        public async Task CleanUpAsync()
+        {
+            var state = Interlocked.Exchange(ref _state, CreateInitialState());
+
+            var toolTasks = state.ToolTasks;
+
+            if (!toolTasks.IsEmpty)
+            {
+                foreach (var task in toolTasks)
+                    await ((Task)task).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+            }
         }
 
         public void AddToolTask(Task<PollTaskResult> task)
