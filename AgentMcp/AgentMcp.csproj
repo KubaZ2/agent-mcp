@@ -16,17 +16,17 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Meziantou.Framework.Globbing" Version="5.0.5" />
+    <PackageReference Include="Meziantou.Framework.Globbing" Version="5.0.7" />
     <PackageReference Include="Microsoft.Extensions.AI" Version="10.11.0" />
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.11.0" />
     <PackageReference Include="MinVer" Version="8.0.0">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="ModelContextProtocol" Version="2.2.0" />
-    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.2.0" />
-    <PackageReference Include="ModelContextProtocol.Extensions.Tasks" Version="2.2.0" />
-    <PackageReference Include="Ollama" Version="1.15.2-dev.33" />
+    <PackageReference Include="ModelContextProtocol" Version="2.3.0" />
+    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.3.0" />
+    <PackageReference Include="ModelContextProtocol.Extensions.Tasks" Version="2.3.0" />
+    <PackageReference Include="Ollama" Version="1.15.2-dev.39" />
     <PackageReference Include="OpenAI" Version="2.14.0" />
     <PackageReference Include="tryAGI.Anthropic" Version="3.8.3" />
   </ItemGroup>
