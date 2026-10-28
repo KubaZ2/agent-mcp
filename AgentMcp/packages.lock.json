@@ -4,9 +4,9 @@
     "net11.0": {
       "Meziantou.Framework.Globbing": {
         "type": "Direct",
-        "requested": "[5.0.5, )",
-        "resolved": "5.0.5",
-        "contentHash": "avQpChqO+tUtmumNk+qTENvdKDSi0KJJuqb/pIIDKyyURGzDRQWAnM5dBUSFdbOSBBTZqZiJ+shd+yDvTJNaTg=="
+        "requested": "[5.0.8, )",
+        "resolved": "5.0.8",
+        "contentHash": "5XaLFDllQdJKS7dK8qWDZECj7ek2oKF1UiHen/xnXVXKnNimsZcUzxXWWH+XtKPChfG6q4NxJ4/5LIdZV2ixuA=="
       },
       "Microsoft.DotNet.ILCompiler": {
         "type": "Direct",
@@ -54,39 +54,39 @@
       },
       "ModelContextProtocol": {
         "type": "Direct",
-        "requested": "[2.2.0, )",
-        "resolved": "2.2.0",
-        "contentHash": "4Pb9u02Nwsp0poueDsqNdyGRojFxOYpljB7zDBsq+aHL+Afou3OgxlBc3GWFVnsRMRJrUtWqDh3s6k2JgPzmrQ==",
+        "requested": "[2.3.0, )",
+        "resolved": "2.3.0",
+        "contentHash": "PHZ0q8xTAoysqUKpA5gC0RGJSfwpZhfsNz+9Sw0X0RzFFVHjIE52sx6C+ogMn+LSE+FfiYiNscPJhM6q6DMT6Q==",
         "dependencies": {
-          "ModelContextProtocol.Core": "[2.2.0]"
+          "ModelContextProtocol.Core": "[2.3.0]"
         }
       },
       "ModelContextProtocol.AspNetCore": {
         "type": "Direct",
-        "requested": "[2.2.0, )",
-        "resolved": "2.2.0",
-        "contentHash": "3JelDMuFIwFzXybsh6K30G6wXu5gmqKnuRnieqgBMuR0FkqqXRv4B+NYZuPgthSyNq5UwRyvv2U2VJBE3RD3PQ==",
+        "requested": "[2.3.0, )",
+        "resolved": "2.3.0",
+        "contentHash": "YaRK007jAIFYAGH65I2SPsXVHzaFDRBx+d3swxLCziRYysmk9zGCWm+Lqdt5geHq0wDwCcvwYkMzAOSUWLpajw==",
         "dependencies": {
-          "ModelContextProtocol": "[2.2.0]"
+          "ModelContextProtocol": "[2.3.0]"
         }
       },
       "ModelContextProtocol.Extensions.Tasks": {
         "type": "Direct",
-        "requested": "[2.2.0, )",
-        "resolved": "2.2.0",
-        "contentHash": "cIGGEIL/KVbPBxflSF6TRKmjNTGk668e8x/R+Jx9l8VPHH70BisCmjdtHdkDHbbBr9gGMbjBjJdiNMJecweCGw==",
+        "requested": "[2.3.0, )",
+        "resolved": "2.3.0",
+        "contentHash": "ixSXGwg+RcnPSbH+Xn7EoFxnzs3NgNbiL+jK/Unq3cpVYtcXlS/wz5DvBPa7Drc1B8/QM4gfrMCGz/XIbu/zYQ==",
         "dependencies": {
-          "ModelContextProtocol": "[2.2.0]"
+          "ModelContextProtocol": "[2.3.0]"
         }
       },
       "Ollama": {
         "type": "Direct",
-        "requested": "[1.15.2-dev.33, )",
-        "resolved": "1.15.2-dev.33",
-        "contentHash": "IdKerm+svgV8s0RardPuLnRwyeowUrGjDxZLDvqE6SZrHynBlMPgLACPE7I05cTDG698H/HQ9LmP+Ls7ajPBmQ==",
+        "requested": "[1.15.2-dev.41, )",
+        "resolved": "1.15.2-dev.41",
+        "contentHash": "HM99xK3ZZHKoXpQBqJJXtpgdNOAUPK/XKJ9/zN+VZAcoCqW9EuTNj4wGg5EATKK/4bN7Ccwry4QIN9IlFKqFIw==",
         "dependencies": {
           "CSharpToJsonSchema": "3.10.6",
-          "Microsoft.Extensions.AI.Abstractions": "10.10.1"
+          "Microsoft.Extensions.AI.Abstractions": "10.11.0"
         }
       },
       "OpenAI": {
@@ -118,10 +118,10 @@
       },
       "ModelContextProtocol.Core": {
         "type": "Transitive",
-        "resolved": "2.2.0",
-        "contentHash": "FeBfXU6T8k+jw4afg4sfxdEX2rL/e5oKOk9ROOGztu9k47+7Bz08sdaToYt2XvMY1opNbwxYQOFMj6wH9TInhA==",
+        "resolved": "2.3.0",
+        "contentHash": "EDpbQholhVWoNumb0Ab3oGv9LmXOLgaD5ixEIUkrnzpnqD0TJCSHTJ5G71/J1KlrQ98aWDclWTPMffKTnCJoMw==",
         "dependencies": {
-          "Microsoft.Extensions.AI.Abstractions": "10.8.3"
+          "Microsoft.Extensions.AI.Abstractions": "10.11.0"
         }
       },
       "System.ClientModel": {
