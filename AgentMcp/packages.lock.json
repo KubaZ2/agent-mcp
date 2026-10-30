@@ -81,9 +81,9 @@
       },
       "Ollama": {
         "type": "Direct",
-        "requested": "[1.15.2-dev.41, )",
-        "resolved": "1.15.2-dev.41",
-        "contentHash": "HM99xK3ZZHKoXpQBqJJXtpgdNOAUPK/XKJ9/zN+VZAcoCqW9EuTNj4wGg5EATKK/4bN7Ccwry4QIN9IlFKqFIw==",
+        "requested": "[1.15.2-dev.42, )",
+        "resolved": "1.15.2-dev.42",
+        "contentHash": "Jv4xCcbKamE/Pww96g/x6E9N28xYpt9FVV0nr17DwfPvoxHii06uciBlWdCLJgqUmftJK+Gz6vallRYA7R+g4Q==",
         "dependencies": {
           "CSharpToJsonSchema": "3.10.6",
           "Microsoft.Extensions.AI.Abstractions": "10.11.0"
